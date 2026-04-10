@@ -1,0 +1,229 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - Lambda environment variables without encryption (using default AWS managed key)
+
+Metadata:
+  Misconfiguration:
+    Category: "Lack of Encryption"
+    Severity: "HIGH"
+    RuleId: "LAMBDA-001"
+    Description: "Lambda function environment variables are not encrypted with a customer managed KMS key. While AWS encrypts them by default, using default key means less control and potential exposure of sensitive data (API keys, database passwords, tokens) in plaintext in Lambda console/API."
+    Remediation: "Enable encryption with customer managed KMS key for Lambda environment variables"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "KmsKeyArn"
+      - "Environment"
+      - "Variables"
+      - "kms:Encrypt"
+      - "kms:Decrypt"
+      - "AWS managed key"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: Lambda function with unencrypted environment variables
+  
+  # MISCONFIGURATION 1: Lambda with plaintext environment variables (no custom KMS)
+  LambdaWithPlaintextEnvVars:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: "lambda-plaintext-env-vars"
+      Handler: "index.handler"
+      Runtime: "python3.9"
+      Role: !GetAtt LambdaExecutionRole.Arn
+      # MISCONFIGURATION: No KmsKeyArn specified
+      # Environment variables are stored with default AWS managed key
+      # Can be viewed in plaintext in Lambda console
+      Environment:
+        Variables:
+          DATABASE_PASSWORD: "MySecretPassword123"
+          API_KEY: "sk-live-abc123xyz789"
+          JWT_SECRET: "super-secret-jwt-key-2024"
+          DB_USERNAME: "admin"
+          DB_HOST: "prod-database.aws.com"
+      # MISCONFIGURATION END
+      Code:
+        ZipFile: |
+          import os
+          def handler(event, context):
+              # These secrets are accessible in plaintext
+              db_password = os.environ.get('DATABASE_PASSWORD')
+              api_key = os.environ.get('API_KEY')
+              print(f"Database password: {db_password}")
+              print(f"API key: {api_key}")
+              return {"statusCode": 200, "body": "Function executed"}
+
+  # MISCONFIGURATION 2: Lambda with sensitive data but no encryption
+  LambdaWithSensitiveData:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: "lambda-sensitive-data-env"
+      Handler: "app.handler"
+      Runtime: "nodejs18.x"
+      Role: !GetAtt LambdaExecutionRole.Arn
+      # MISCONFIGURATION: Using default encryption (no KmsKeyArn)
+      Environment:
+        Variables:
+          STRIPE_SECRET_KEY: "sk_test_51..."
+          S3_BUCKET_NAME: "confidential-data-bucket"
+          ENCRYPTION_KEY: "base64-encoded-key-here"
+          SLACK_WEBHOOK: "https://hooks.slack.com/services/xxx/yyy/zzz"
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+              const stripeKey = process.env.STRIPE_SECRET_KEY;
+              const webhook = process.env.SLACK_WEBHOOK;
+              console.log("Processing with keys");
+              return { statusCode: 200 };
+          };
+
+  # MISCONFIGURATION 3: Lambda with KMS key defined but using AWS managed key (same as none)
+  # This is still a misconfiguration because it's not customer managed
+  LambdaWithDefaultKMS:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: "lambda-default-kms"
+      Handler: "index.handler"
+      Runtime: "python3.9"
+      Role: !GetAtt LambdaExecutionRole.Arn
+      # KmsKeyArn omitted = uses AWS managed key (MISCONFIGURATION for sensitive data)
+      Environment:
+        Variables:
+          OAUTH_CLIENT_SECRET: "supersecretclientsecret"
+          REFRESH_TOKEN: "refresh-token-value"
+      Code:
+        ZipFile: |
+          import os
+          def handler(event, context):
+              secret = os.environ.get('OAUTH_CLIENT_SECRET')
+              return {"statusCode": 200}
+
+  # Example of CORRECT configuration with customer managed KMS (commented)
+  # CustomerManagedKMSKey:
+  #   Type: AWS::KMS::Key
+  #   Properties:
+  #     Description: "Customer managed key for Lambda environment variables"
+  #     Enabled: true
+  #     KeyPolicy:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+  #           Action: "kms:*"
+  #           Resource: "*"
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: "lambda.amazonaws.com"
+  #           Action:
+  #             - "kms:Decrypt"
+  #             - "kms:Encrypt"
+  #             - "kms:GenerateDataKey"
+  #           Resource: "*"
+  #
+  # SecureLambdaFunction:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: "lambda-encrypted-env-vars"
+  #     Handler: "index.handler"
+  #     Runtime: "python3.9"
+  #     Role: !GetAtt LambdaExecutionRole.Arn
+  #     KmsKeyArn: !GetAtt CustomerManagedKMSKey.Arn
+  #     Environment:
+  #       Variables:
+  #         DATABASE_PASSWORD: "MySecretPassword123"
+  #     Code:
+  #       ZipFile: |
+  #         def handler(event, context):
+  #             return {"statusCode": 200}
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+Outputs:
+  LambdaFunctionName:
+    Description: "Lambda function with unencrypted environment variables"
+    Value: !Ref LambdaWithPlaintextEnvVars
+  SensitiveDataFunctionName:
+    Description: "Lambda function with sensitive data in env vars"
+    Value: !Ref LambdaWithSensitiveData
+  RiskDescription:
+    Description: "Why this is dangerous"
+    Value: |
+      Lambda environment variables with sensitive data are at risk:
+      
+      1. VISIBLE IN CONSOLE: Anyone with Lambda read permissions can see them in plaintext
+      2. VISIBLE IN API: Lambda API calls return environment variables in plaintext
+      3. VISIBLE IN LOGS: Misconfigured logging may expose them
+      4. VISIBLE IN SNAPSHOTS: Lambda snapshots contain plaintext env vars
+      5. DEFAULT KEY: AWS managed key provides less control and audit
+      
+      Sensitive data commonly found in env vars:
+      - Database passwords and connection strings
+      - API keys (Stripe, AWS, GitHub, Slack)
+      - JWT secrets and encryption keys
+      - OAuth client secrets and tokens
+      - Service account credentials
+  AttackScenario:
+    Description: "How attacker exposes secrets"
+    Value: |
+      Scenario 1 - IAM Compromise:
+      1. Attacker compromises IAM user with lambda:GetFunction permission
+      2. Attacker runs: aws lambda get-function --function-name lambda-plaintext-env-vars
+      3. Attacker sees ALL environment variables in plaintext
+      4. Attacker steals database password and API keys
+      5. Attacker uses stolen credentials to access other services
+      
+      Scenario 2 - Console Access:
+      1. Malicious employee with read-only console access
+      2. Opens Lambda function in AWS Console
+      3. Clicks on "Environment variables" tab
+      4. Sees all secrets in plaintext
+      5. Copies them and sells on dark web
+      
+      Scenario 3 - Backup Exposure:
+      1. Lambda function snapshots are backed up
+      2. Backup storage is compromised
+      3. Environment variables extracted from backup
+      4. Secrets exposed even after function is deleted
+  RemediationCommand:
+    Description: "Fix: Use customer managed KMS key for encryption"
+    Value: |
+      # Step 1: Create customer managed KMS key
+      aws kms create-key --description "Lambda env vars encryption key" --key-usage ENCRYPT_DECRYPT
+      
+      # Step 2: Create alias
+      aws kms create-alias --alias-name alias/lambda-env-encryption --target-key-id <KEY_ID>
+      
+      # Step 3: Update Lambda function to use KMS key
+      aws lambda update-function-configuration \
+        --function-name lambda-plaintext-env-vars \
+        --kms-key-arn arn:aws:kms:us-east-1:123456789012:key/<KEY_ID>
+      
+      # Step 4: Store secrets in AWS Secrets Manager (BEST PRACTICE)
+      aws secretsmanager create-secret --name prod/db-password --secret-string "MySecretPassword123"
+      
+      # Step 5: Update Lambda to retrieve secrets from Secrets Manager instead of env vars
+  BestPractice:
+    Description: "Best practice for Lambda secrets"
+    Value: |
+      NEVER store sensitive data in environment variables. Instead:
+      
+      1. Use AWS Secrets Manager for database passwords, API keys
+      2. Use AWS Systems Manager Parameter Store for configuration
+      3. Use IAM roles for AWS service access (no keys needed)
+      4. Use KMS encryption with customer managed keys if env vars are required
+      5. Enable least privilege access to Lambda functions
+      6. Regularly audit and rotate secrets
+  ComplianceViolation:
+    Description: "Compliance frameworks requiring encryption"
+    Value: "PCI DSS (Requirement 3.4), HIPAA, SOC 2, NIST SP 800-171 all require encryption of sensitive data at rest"
