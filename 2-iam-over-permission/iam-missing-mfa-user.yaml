@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - IAM user without MFA (Multi-Factor Authentication) enabled
+
+Metadata:
+  Misconfiguration:
+    Category: "IAM & Access Over-Permission"
+    Severity: "HIGH"
+    RuleId: "IAM-008"
+    Description: "IAM user does not have MFA enabled. User can be compromised via password theft or phishing."
+    Remediation: "Enable MFA for the IAM user using Virtual MFA device or hardware MFA"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "MFADevice"
+      - "VirtualMFADevice"
+      - "EnableMFADevice"
+      - "LoginProfile"
+      - "User without MFA"
+      - "MFA"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: IAM User WITHOUT MFA enabled
+  NoMFAUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: "no-mfa-user"
+      LoginProfile:
+        Password: "TempPassword123!"
+        PasswordResetRequired: true
+      # MISCONFIGURATION: No MFA device is attached to this user
+      Tags:
+        - Key: Misconfiguration
+          Value: "IAM-User-Without-MFA"
+
+  # MISCONFIGURATION: Access key without MFA requirement
+  NoMFAUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref NoMFAUser
+
+  # OPTIONAL: Policy that requires MFA (this would be GOOD, but we are NOT adding it)
+  # This is commented to show what SHOULD be there but isn't
+  # RequireMFAPolicy:
+  #   Type: AWS::IAM::Policy
+  #   Properties:
+  #     PolicyName: "RequireMFA"
+  #     PolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: Deny
+  #           Action: "*"
+  #           Resource: "*"
+  #           Condition:
+  #             BoolIfExists:
+  #               "aws:MultiFactorAuthPresent": "false"
+  #     Users:
+  #       - !Ref NoMFAUser
+
+  # MISCONFIGURATION EXTENSION: User has admin privileges without MFA (even worse)
+  AdminWithoutMFAUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: "admin-without-mfa"
+      LoginProfile:
+        Password: "AdminPassword123!"
+      Tags:
+        - Key: Misconfiguration
+          Value: "IAM-Admin-Without-MFA-CRITICAL"
+
+  AdminWithoutMFAPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "AdminPolicyWithoutMFA"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action: "*"
+            Resource: "*"
+      Users:
+        - !Ref AdminWithoutMFAUser
+
+  AdminWithoutMFAKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref AdminWithoutMFAUser
+
+Outputs:
+  UserWithoutMFA:
+    Description: "IAM user without MFA enabled"
+    Value: !Ref NoMFAUser
+  AdminWithoutMFA:
+    Description: "Admin user without MFA (CRITICAL)"
+    Value: !Ref AdminWithoutMFAUser
+  AccessKeyId:
+    Description: "Access Key ID for user without MFA"
+    Value: !Ref NoMFAUserAccessKey
+  RiskDescription:
+    Description: "Why this is dangerous"
+    Value: "If password is stolen, attacker can access AWS resources without second authentication factor"
+  RemediationCommand:
+    Description: "Fix: Enable MFA for the user"
+    Value: !Sub "aws iam create-virtual-mfa-device --virtual-mfa-device-name ${NoMFAUser}-MFA --outfile QRCode.png"
+  CheckMFAStatusCommand:
+    Description: "Command to check if user has MFA enabled"
+    Value: !Sub "aws iam list-mfa-devices --user-name ${NoMFAUser}"
