@@ -1,0 +1,174 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - EBS volume with encryption disabled (data at rest not encrypted)
+
+Metadata:
+  Misconfiguration:
+    Category: "Lack of Encryption"
+    Severity: "HIGH"
+    RuleId: "EBS-002"
+    Description: "EBS volume has encryption disabled. Any data written to this volume (application data, logs, temp files, databases) is stored unencrypted at rest."
+    Remediation: "Enable EBS encryption by default at the account level, or specify Encrypted: true for each volume"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "Encrypted: false"
+      - "Encrypted: false"
+      - "EBS encryption"
+      - "Volume encryption"
+      - "ebs-encryption"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: EBS volume with encryption disabled
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      MapPublicIpOnLaunch: true
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Basic security group"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: "0.0.0.0/0"
+
+  # MISCONFIGURATION 1: EC2 instance with unencrypted root volume
+  UnencryptedRootVolumeInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      # MISCONFIGURATION: No block device mappings specifying encryption
+      # Root volume will be unencrypted
+      Tags:
+        - Key: Name
+          Value: "Unencrypted-Root-Volume"
+        - Key: Misconfiguration
+          Value: "EBS-Encryption-Disabled"
+
+  # MISCONFIGURATION 2: Additional EBS volume with encryption disabled
+  UnencryptedAdditionalVolume:
+    Type: AWS::EC2::Volume
+    Properties:
+      Size: 10
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      # MISCONFIGURATION: Encrypted property is false (or omitted, which defaults to false)
+      Encrypted: false
+      VolumeType: gp3
+      Tags:
+        - Key: Name
+          Value: "Unencrypted-Data-Volume"
+        - Key: Misconfiguration
+          Value: "EBS-Encryption-Disabled"
+
+  # Attach the unencrypted volume to the instance
+  VolumeAttachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      InstanceId: !Ref UnencryptedRootVolumeInstance
+      VolumeId: !Ref UnencryptedAdditionalVolume
+      Device: /dev/sdf
+
+  # MISCONFIGURATION 3: EC2 instance where encryption is explicitly disabled
+  ExplicitlyDisabledEncryptionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 10
+            VolumeType: gp3
+            # MISCONFIGURATION: Explicitly setting Encrypted: false
+            Encrypted: false
+        - DeviceName: /dev/sdb
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            # MISCONFIGURATION: Another unencrypted volume
+            Encrypted: false
+      Tags:
+        - Key: Name
+          Value: "Explicitly-Unencrypted-Instance"
+        - Key: Misconfiguration
+          Value: "EBS-Encryption-Disabled-Explicit"
+
+# Mapping for AMI IDs per region
+Mappings:
+  AWSRegionArch2AMI:
+    us-east-1:
+      AMI: ami-0c02fb55956c7d316
+    us-west-2:
+      AMI: ami-0d70546e43a328d54
+    eu-west-1:
+      AMI: ami-07470b0ad10cbe60e
+
+Outputs:
+  UnencryptedInstanceId:
+    Description: "EC2 instance with unencrypted root volume"
+    Value: !Ref UnencryptedRootVolumeInstance
+  UnencryptedVolumeId:
+    Description: "Additional unencrypted EBS volume"
+    Value: !Ref UnencryptedAdditionalVolume
+  ExplicitlyUnencryptedInstanceId:
+    Description: "EC2 instance with explicitly disabled encryption"
+    Value: !Ref ExplicitlyDisabledEncryptionInstance
+  RiskDescription:
+    Description: "Why this is dangerous"
+    Value: |
+      Data on unencrypted EBS volumes is stored as PLAINTEXT:
+      - Application data (user data, customer PII)
+      - Database files (if running database on EC2)
+      - Log files (may contain secrets, credentials)
+      - Temporary files (session data, cache)
+      - Backups and snapshots also unencrypted
+      
+      If physical disk is accessed or stolen, ALL data is readable.
+  AttackScenario:
+    Description: "How data can be exposed"
+    Value: |
+      1. Attacker gains access to AWS account (compromised keys)
+      2. Attacker creates snapshot of unencrypted volume
+      3. Attacker creates new volume from snapshot
+      4. Attacher attaches volume to their own EC2 instance
+      5. Attacker mounts volume and reads ALL data in PLAINTEXT
+      6. Customer data, credentials, application secrets exposed
+  RemediationCommand:
+    Description: "Fix: Enable encryption for new volumes"
+    Value: |
+      # Enable EBS encryption by default at account level
+      aws ec2 enable-ebs-encryption-by-default
+      
+      # For existing unencrypted volumes (requires migration):
+      # 1. Create encrypted snapshot
+      aws ec2 copy-snapshot --source-snapshot-id <SNAPSHOT_ID> --source-region <REGION> --encrypted
+      # 2. Create new encrypted volume from encrypted snapshot
+      # 3. Detach old volume, attach new volume
+  CheckEncryptionStatus:
+    Description: "Command to check if account has default encryption enabled"
+    Value: "aws ec2 get-ebs-encryption-by-default"
+  ComplianceViolation:
+    Description: "Compliance frameworks requiring EBS encryption"
+    Value: "PCI DSS, HIPAA, SOC 2, NIST 800-53, FedRAMP all require encryption at rest"
