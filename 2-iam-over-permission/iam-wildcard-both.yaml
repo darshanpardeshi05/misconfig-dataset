@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - IAM policy with BOTH Action: "*" AND Resource: "*" (Full Administrator Access)
+
+Metadata:
+  Misconfiguration:
+    Category: "IAM & Access Over-Permission"
+    Severity: "CRITICAL"
+    RuleId: "IAM-003"
+    Description: "IAM policy has BOTH Action: '*' AND Resource: '*' - This is FULL ADMINISTRATOR access to everything in the AWS account"
+    Remediation: "DELETE THIS IMMEDIATELY. Replace with least-privilege permissions using specific actions and resource ARNs"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "Action: '*'"
+      - "Resource: '*'"
+      - "Action: [*]"
+      - "Resource: [*]"
+      - "Effect: Allow"
+      - "AdministratorAccess"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: IAM User with FULL ADMIN access (both wildcards)
+  FullAdminUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: "full-admin-wildcard-user"
+      Tags:
+        - Key: Misconfiguration
+          Value: "IAM-Wildcard-Both-CRITICAL"
+
+  # MISCONFIGURATION: Policy with BOTH Action: "*" AND Resource: "*"
+  # This is the most dangerous IAM misconfiguration possible
+  WildcardBothPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "WildcardBothPolicy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            # MISCONFIGURATION: Action wildcard - can do ANY action
+            Action: "*"
+            # MISCONFIGURATION: Resource wildcard - on ANY resource
+            Resource: "*"
+      Users:
+        - !Ref FullAdminUser
+  # MISCONFIGURATION END
+
+  # Alternative: Same but using AWS Managed Policy (even worse)
+  # Uncomment to attach AdministratorAccess managed policy
+  # AdminManagedPolicy:
+  #   Type: AWS::IAM::UserManagedPolicyAttachment
+  #   Properties:
+  #     UserName: !Ref FullAdminUser
+  #     PolicyArn: "arn:aws:iam::aws:policy/AdministratorAccess"
+
+  # Create access key for this user
+  UserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref FullAdminUser
+
+Outputs:
+  Username:
+    Description: "Name of user with FULL ADMIN access (CRITICAL MISCONFIGURATION)"
+    Value: !Ref FullAdminUser
+  AccessKeyId:
+    Description: "Access Key ID - DO NOT SHARE"
+    Value: !Ref UserAccessKey
+  SecretAccessKey:
+    Description: "Secret Access Key - DO NOT SHARE"
+    Value: !GetAtt UserAccessKey.SecretAccessKey
+  WhatThisUserCanDo:
+    Description: "This user has COMPLETE CONTROL over the entire AWS account"
+    Value: "Can create, modify, delete ANY resource. Can disable security tools. Can delete all data."
+  RemediationCommand:
+    Description: "URGENT FIX: Delete this user immediately"
+    Value: !Sub "aws iam delete-user-policy --user-name full-admin-wildcard-user --policy-name WildcardBothPolicy && aws iam delete-user --user-name full-admin-wildcard-user"
+  EmergencyFix:
+    Description: "If user has already been used, rotate all credentials in the account"
+    Value: "Audit CloudTrail logs for all actions performed by this user"
