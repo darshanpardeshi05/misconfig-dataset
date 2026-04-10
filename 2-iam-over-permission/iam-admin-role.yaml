@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - IAM role with AdministratorAccess managed policy (Full Admin access)
+
+Metadata:
+  Misconfiguration:
+    Category: "IAM & Access Over-Permission"
+    Severity: "CRITICAL"
+    RuleId: "IAM-004"
+    Description: "IAM role has AdministratorAccess managed policy attached - This grants full admin permissions to any service or user that can assume this role"
+    Remediation: "Remove AdministratorAccess policy. Attach only specific policies needed for the role's function"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "AdministratorAccess"
+      - "arn:aws:iam::aws:policy/AdministratorAccess"
+      - "PolicyArn:"
+      - "ManagedPolicyArns"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: IAM Role with AdministratorAccess
+  AdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "misconfig-admin-role"
+      # This role can be assumed by EC2 instances (allows EC2 to have admin rights)
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "ec2.amazonaws.com"
+            Action: "sts:AssumeRole"
+      # MISCONFIGURATION: Attaching AdministratorAccess managed policy
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AdministratorAccess"
+      # MISCONFIGURATION: Also allows anyone to pass this role
+      Tags:
+        - Key: Misconfiguration
+          Value: "IAM-Admin-Role-CRITICAL"
+
+  # Instance profile to allow EC2 to assume this role
+  AdminInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: "misconfig-admin-instance-profile"
+      Roles:
+        - !Ref AdminRole
+
+  # Optional: Launch an EC2 instance that uses this admin role (commented)
+  # This would give the EC2 instance full admin access to your AWS account
+  # AdminEC2Instance:
+  #   Type: AWS::EC2::Instance
+  #   Properties:
+  #     InstanceType: t2.micro
+  #     ImageId: ami-0c02fb55956c7d316
+  #     IamInstanceProfile: !Ref AdminInstanceProfile
+
+  # MISCONFIGURATION EXTENSION: Trust policy allowing ANY AWS account to assume this role
+  # Uncommenting below makes this even more dangerous
+  # AdminRoleTrustPolicy:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: "misconfig-admin-role-cross-account"
+  #     AssumeRolePolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: "Allow"
+  #           Principal:
+  #             AWS: "*"  # ANY AWS account can assume this role
+  #           Action: "sts:AssumeRole"
+  #     ManagedPolicyArns:
+  #       - "arn:aws:iam::aws:policy/AdministratorAccess"
+
+Outputs:
+  RoleName:
+    Description: "Name of IAM role with AdministratorAccess (CRITICAL MISCONFIGURATION)"
+    Value: !Ref AdminRole
+  RoleArn:
+    Description: "ARN of the admin role"
+    Value: !GetAtt AdminRole.Arn
+  WhatThisRoleCanDo:
+    Description: "Any service or user assuming this role gets FULL ADMIN access"
+    Value: "Complete control over ALL AWS resources in this account"
+  AssumeRoleCommand:
+    Description: "Command to assume this role from CLI"
+    Value: !Sub "aws sts assume-role --role-arn ${GetAtt AdminRole.Arn} --role-session-name TestSession"
+  RemediationCommand:
+    Description: "Fix: Detach AdministratorAccess policy"
+    Value: !Sub "aws iam detach-role-policy --role-name ${AdminRole} --policy-arn arn:aws:iam::aws:policy/AdministratorAccess"
+  DeleteRoleCommand:
+    Description: "Delete the role completely"
+    Value: !Sub "aws iam delete-role --role-name ${AdminRole}"
