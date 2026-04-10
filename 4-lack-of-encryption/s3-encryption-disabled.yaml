@@ -1,0 +1,157 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - S3 bucket with default encryption disabled (data stored without encryption)
+
+Metadata:
+  Misconfiguration:
+    Category: "Lack of Encryption"
+    Severity: "MEDIUM"
+    RuleId: "S3-006"
+    Description: "S3 bucket does not have default encryption enabled. Data uploaded to this bucket will be stored unencrypted at rest."
+    Remediation: "Enable default encryption on S3 bucket using SSE-S3 or SSE-KMS"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "BucketEncryption"
+      - "SSE-S3"
+      - "SSE-KMS"
+      - "ServerSideEncryptionConfiguration"
+      - "encryption disabled"
+      - "no encryption"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: S3 bucket with NO default encryption
+  
+  UnencryptedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "unencrypted-bucket-${AWS::AccountId}"
+      # MISCONFIGURATION: No BucketEncryption property specified
+      # Default encryption is DISABLED by AWS when not specified
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Misconfiguration
+          Value: "S3-Encryption-Disabled"
+        - Key: Severity
+          Value: "MEDIUM"
+
+  # Example of what CORRECT encryption would look like (commented)
+  # CorrectBucket:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: !Sub "encrypted-bucket-${AWS::AccountId}"
+  #     BucketEncryption:
+  #       ServerSideEncryptionConfiguration:
+  #         - ServerSideEncryptionByDefault:
+  #             SSEAlgorithm: AES256
+
+  # Upload a test object (unencrypted)
+  UnencryptedObject:
+    Type: Custom::S3ObjectUpload
+    Properties:
+      ServiceToken: !GetAtt UploadFunction.Arn
+      BucketName: !Ref UnencryptedBucket
+      ObjectKey: "sensitive-data.txt"
+      ObjectContent: "This data is stored WITHOUT encryption"
+
+  # Lambda function to upload object
+  UploadFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Create':
+                      s3 = boto3.client('s3')
+                      bucket = event['ResourceProperties']['BucketName']
+                      key = event['ResourceProperties']['ObjectKey']
+                      content = event['ResourceProperties']['ObjectContent']
+                      
+                      # MISCONFIGURATION: Uploading without specifying encryption
+                      # Data will be stored unencrypted
+                      s3.put_object(
+                          Bucket=bucket,
+                          Key=key,
+                          Body=content.encode('utf-8')
+                      )
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3UploadPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${UnencryptedBucket}/*"
+
+Outputs:
+  BucketName:
+    Description: "S3 bucket with encryption disabled"
+    Value: !Ref UnencryptedBucket
+  BucketArn:
+    Description: "ARN of unencrypted bucket"
+    Value: !Sub "arn:aws:s3:::${UnencryptedBucket}"
+  RiskDescription:
+    Description: "Why this is dangerous"
+    Value: |
+      Data stored in this bucket is NOT encrypted at rest:
+      - Anyone with disk access can read raw data
+      - Compliance violations (PCI DSS, HIPAA, GDPR require encryption)
+      - Data breaches expose plaintext data
+      - Physical disk theft exposes all data
+  AttackScenario:
+    Description: "How data can be exposed"
+    Value: |
+      1. Attacker gains access to AWS account (via compromised keys)
+      2. Attacker lists S3 buckets and finds unencrypted bucket
+      3. Attacker downloads all files - data is PLAINTEXT
+      4. No encryption to protect data at rest
+      5. Customer PII, financial data, credentials exposed
+  RemediationCommand:
+    Description: "Fix: Enable default encryption"
+    Value: |
+      # Enable SSE-S3 encryption
+      aws s3api put-bucket-encryption \
+        --bucket <BUCKET_NAME> \
+        --server-side-encryption-configuration '{
+          "Rules": [
+            {
+              "ApplyServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        }'
+  ComplianceViolation:
+    Description: "Compliance frameworks requiring encryption"
+    Value: "PCI DSS (Requirement 3.4), HIPAA (164.312(a)(2)(iv)), GDPR (Article 32), SOC 2 (CC6.1)"
