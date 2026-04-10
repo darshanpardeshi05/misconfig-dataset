@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - AMI (Amazon Machine Image) shared publicly with all AWS accounts
+
+# METADATA - For research tracking and automated detection
+Metadata:
+  Misconfiguration:
+    Category: "Storage Exposure"
+    Severity: "CRITICAL"
+    RuleId: "AMI-001"
+    Description: "AMI is shared publicly with all AWS accounts (anyone can launch EC2 instances from this image)"
+    Remediation: "Modify AMI permissions to private or specific accounts only"
+
+Resources:
+  # MISCONFIGURATION NOTE: 
+  # AMIs cannot be made public directly in CloudFormation.
+  # The misconfiguration happens AFTER creation using AWS CLI, Console, or API.
+  #
+  # Steps to create this misconfiguration:
+  # 1. Create an EC2 instance
+  # 2. Create an AMI from that instance
+  # 3. Share the AMI with "All AWS accounts" using modify-image-attribute
+  #
+  # Command to make AMI public:
+  # aws ec2 modify-image-attribute --image-id <AMI_ID> --launch-permission "Add=[{Group=all}]"
+
+  # Source EC2 instance to create AMI from
+  SourceEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", !FindInMap [Arch2, "AMD", "ArchPreference"]]
+      KeyName: "temp-key"  # User needs to create this key pair
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: "Source-Instance-For-Public-AMI"
+
+  # Security Group for the instance
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Basic security group for source instance"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: "0.0.0.0/0"  # MISCONFIGURATION: SSH open to world (separate issue)
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: "0.0.0.0/0"
+
+  # VPC and networking
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      MapPublicIpOnLaunch: true
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+
+# MISCONFIGURATION STEPS AFTER DEPLOYMENT:
+#
+# Step 1: Wait for EC2 instance to be running
+# Step 2: Create AMI from the instance
+#    aws ec2 create-image --instance-id <INSTANCE_ID> --name "Public-Misconfig-AMI" --description "AMI to be shared publicly"
+#
+# Step 3: Wait for AMI creation to complete
+#
+# Step 4: Make the AMI public (THIS IS THE MISCONFIGURATION)
+#    aws ec2 modify-image-attribute --image-id <AMI_ID> --launch-permission "Add=[{Group=all}]"
+#
+# Now ANYONE with an AWS account can launch EC2 instances from this AMI
+# This exposes any sensitive data, software, or credentials baked into the AMI
+
+# Mapping for AMI IDs per region
+Mappings:
+  AWSRegionArch2AMI:
+    us-east-1:
+      AMI: ami-0c02fb55956c7d316
+    us-west-2:
+      AMI: ami-0d70546e43a328d54
+    eu-west-1:
+      AMI: ami-07470b0ad10cbe60e
+  Arch2:
+    AMD:
+      ArchPreference: "AMD"
+
+Outputs:
+  InstanceId:
+    Description: "EC2 instance ID (to create AMI from)"
+    Value: !Ref SourceEC2Instance
+  CreateAmiCommand:
+    Description: "Command to create AMI from this instance"
+    Value: !Sub "aws ec2 create-image --instance-id ${SourceEC2Instance} --name Public-Misconfig-AMI --description 'AMI to be shared publicly'"
+  MakePublicCommand:
+    Description: "Command to make AMI public (MISCONFIGURATION)"
+    Value: "aws ec2 modify-image-attribute --image-id <AMI_ID> --launch-permission 'Add=[{Group=all}]'"
