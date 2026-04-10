@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - S3 bucket with Block Public Access disabled
+
+# METADATA - For research tracking and automated detection
+Metadata:
+  Misconfiguration:
+    Category: "Storage Exposure"
+    Severity: "HIGH"
+    RuleId: "S3-003"
+    Description: "S3 bucket has Block Public Access completely disabled while bucket itself may be private, but this setting allows future public access"
+    Remediation: "Enable Block Public Access for the bucket or at account level"
+
+Resources:
+  NoBlockPublicAccessBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "no-block-public-${AWS::AccountId}"
+      
+      # No explicit AccessControl set (defaults to private)
+      # But Block Public Access is completely disabled - MISCONFIGURATION
+      
+      # MISCONFIGURATION START: All Block Public Access settings are disabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false      # Should be true - allows public ACLs
+        BlockPublicPolicy: false    # Should be true - allows public policies
+        IgnorePublicAcls: false     # Should be true - does not ignore public ACLs
+        RestrictPublicBuckets: false # Should be true - does not restrict public buckets
+      # MISCONFIGURATION END
