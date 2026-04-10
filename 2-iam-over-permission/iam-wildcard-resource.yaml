@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - IAM policy with wildcard Resource (*) allowing access to all resources
+
+Metadata:
+  Misconfiguration:
+    Category: "IAM & Access Over-Permission"
+    Severity: "HIGH"
+    RuleId: "IAM-002"
+    Description: "IAM policy allows access to ALL resources (*) which is overly permissive. User can access any resource of the allowed actions."
+    Remediation: "Replace '*' with specific resource ARNs like 'arn:aws:s3:::my-bucket/*'"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "Resource: '*'"
+      - "Resource: [*]"
+      - "Resource: \"*\""
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: IAM User with resource-wildcard policy
+  WildcardResourceUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: "wildcard-resource-user"
+      Tags:
+        - Key: Misconfiguration
+          Value: "IAM-Wildcard-Resource"
+
+  # MISCONFIGURATION: Policy with Resource: "*" (but actions are specific)
+  # This is dangerous because user can perform allowed actions on ANY resource
+  WildcardResourcePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "WildcardResourcePolicy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            # Actions are specific (S3 read only)
+            Action:
+              - "s3:GetObject"
+              - "s3:ListBucket"
+              - "s3:GetBucketLocation"
+            # MISCONFIGURATION: Resource wildcard - can access ANY S3 bucket
+            Resource: "*"
+      Users:
+        - !Ref WildcardResourceUser
+  # MISCONFIGURATION END
+
+  # Create an access key for this user
+  UserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref WildcardResourceUser
+
+Outputs:
+  Username:
+    Description: "Name of user with resource-wildcard policy"
+    Value: !Ref WildcardResourceUser
+  AccessKeyId:
+    Description: "Access Key ID"
+    Value: !Ref UserAccessKey
+  SecretAccessKey:
+    Description: "Secret Access Key"
+    Value: !GetAtt UserAccessKey.SecretAccessKey
+  WhatThisUserCanDo:
+    Description: "This user can read objects from ANY S3 bucket in the account"
+    Value: "s3:GetObject, s3:ListBucket on ALL buckets"
+  RemediationCommand:
+    Description: "Fix: Replace '*' with specific bucket ARN"
+    Value: !Sub "aws iam put-user-policy --user-name wildcard-resource-user --policy-name WildcardResourcePolicy --policy-document '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\",\"s3:ListBucket\"],\"Resource\":\"arn:aws:s3:::your-specific-bucket/*\"}]}'"
