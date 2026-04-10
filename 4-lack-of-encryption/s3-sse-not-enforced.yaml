@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - S3 bucket allows PUT requests without encryption headers (SSE not enforced)
+
+Metadata:
+  Misconfiguration:
+    Category: "Lack of Encryption"
+    Severity: "MEDIUM"
+    RuleId: "S3-007"
+    Description: "S3 bucket does not enforce encryption for uploaded objects. Clients can upload unencrypted objects without any encryption headers."
+    Remediation: "Add bucket policy that denies PutObject requests without x-amz-server-side-encryption header"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "PutObject"
+      - "x-amz-server-side-encryption"
+      - "s3:x-amz-server-side-encryption"
+      - "SSE-S3"
+      - "SSE-KMS"
+      - "Deny"
+      - "encryption header"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: S3 bucket that does NOT enforce encryption headers
+  
+  NoSSEEnforcedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "no-sse-enforced-${AWS::AccountId}"
+      # MISCONFIGURATION: No bucket policy to enforce encryption headers
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Misconfiguration
+          Value: "S3-SSE-Not-Enforced"
+        - Key: Severity
+          Value: "MEDIUM"
+
+  # MISCONFIGURATION: This policy is MISSING - what should be there but isn't
+  # The correct policy would look like this (commented):
+  # EnforceSSEPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref NoSSEEnforcedBucket
+  #     PolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: "Deny"
+  #           Principal: "*"
+  #           Action: "s3:PutObject"
+  #           Resource: !Sub "arn:aws:s3:::${NoSSEEnforcedBucket}/*"
+  #           Condition:
+  #             StringNotEquals:
+  #               "s3:x-amz-server-side-encryption": "AES256"
+
+  # Example of uploading unencrypted object (allowed because no enforcement)
+  UnencryptedUpload:
+    Type: Custom::S3ObjectUpload
+    Properties:
+      ServiceToken: !GetAtt UploadFunction.Arn
+      BucketName: !Ref NoSSEEnforcedBucket
+      ObjectKey: "unencrypted-file.txt"
+      ObjectContent: "This file was uploaded WITHOUT encryption headers"
+      UseEncryption: false           # MISCONFIGURATION: No encryption header
+
+  # Lambda function that can upload without encryption
+  UploadFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Create':
+                      s3 = boto3.client('s3')
+                      bucket = event['ResourceProperties']['BucketName']
+                      key = event['ResourceProperties']['ObjectKey']
+                      content = event['ResourceProperties']['ObjectContent']
+                      use_encryption = event['ResourceProperties'].get('UseEncryption', 'false') == 'true'
+                      
+                      # MISCONFIGURATION: No encryption headers
+                      if use_encryption:
+                          s3.put_object(
+                              Bucket=bucket,
+                              Key=key,
+                              Body=content.encode('utf-8'),
+                              ServerSideEncryption='AES256'
+                          )
+                      else:
+                          # This upload has NO encryption header - SHOULD BE DENIED but is allowed
+                          s3.put_object(
+                              Bucket=bucket,
+                              Key=key,
+                              Body=content.encode('utf-8')
+                          )
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3UploadPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${NoSSEEnforcedBucket}/*"
+
+Outputs:
+  BucketName:
+    Description: "S3 bucket that does not enforce encryption headers"
+    Value: !Ref NoSSEEnforcedBucket
+  RiskDescription:
+    Description: "Why this is dangerous"
+    Value: |
+      This bucket allows objects to be uploaded WITHOUT encryption:
+      - Developers can forget to add encryption headers
+      - Data stored unencrypted without anyone noticing
+      - No enforcement mechanism exists
+      - Compliance violations for unencrypted data
+  DifferenceFromFile33:
+    Description: "How this differs from File #33"
+    Value: |
+      File #33: No default encryption (bucket doesn't auto-encrypt)
+      File #34: No enforcement (bucket allows unencrypted uploads even if default encryption exists)
+      
+      With this misconfiguration, even if default encryption is enabled, 
+      clients can bypass it by uploading without headers or with different encryption.
+  AttackScenario:
+    Description: "How this leads to data exposure"
+    Value: |
+      1. Developer writes script to upload logs to S3
+      2. Developer forgets to add encryption headers
+      3. Upload succeeds because bucket allows it
+      4. Sensitive logs stored UNENCRYPTED
+      5. Security team assumes all data is encrypted (default encryption enabled)
+      6. Data breach exposes plaintext logs
+  RemediationCommand:
+    Description: "Fix: Add bucket policy to enforce encryption headers"
+    Value: |
+      # Create policy file enforce-sse.json
+      cat > enforce-sse.json << EOF
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Deny",
+            "Principal": "*",
+            "Action": "s3:PutObject",
+            "Resource": "arn:aws:s3:::<BUCKET_NAME>/*",
+            "Condition": {
+              "StringNotEquals": {
+                "s3:x-amz-server-side-encryption": "AES256"
+              }
+            }
+          }
+        ]
+      }
+      EOF
+      
+      # Apply policy
+      aws s3api put-bucket-policy --bucket <BUCKET_NAME> --policy file://enforce-sse.json
+  TestUnencryptedUpload:
+    Description: "Test if bucket allows unencrypted upload (should FAIL after remediation)"
+    Value: "aws s3api put-object --bucket <BUCKET_NAME> --key test.txt --body test.txt"
+  TestEncryptedUpload:
+    Description: "Test if bucket allows encrypted upload (should PASS)"
+    Value: "aws s3api put-object --bucket <BUCKET_NAME> --key test.txt --body test.txt --server-side-encryption AES256"
