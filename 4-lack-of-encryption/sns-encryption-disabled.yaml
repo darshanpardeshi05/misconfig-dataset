@@ -1,0 +1,232 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - SNS topic with encryption disabled (data at rest not encrypted)
+
+Metadata:
+  Misconfiguration:
+    Category: "Lack of Encryption"
+    Severity: "MEDIUM"
+    RuleId: "SNS-001"
+    Description: "SNS topic does not have server-side encryption enabled. Messages published to this topic are stored unencrypted at rest."
+    Remediation: "Enable SSE-SNS encryption using AWS managed KMS key or customer managed key"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "KmsMasterKeyId"
+      - "TopicEncryption"
+      - "sns:Encrypt"
+      - "sns:Decrypt"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: SNS topic with encryption disabled
+  
+  # MISCONFIGURATION 1: SNS topic with NO encryption
+  UnencryptedSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: "unencrypted-sns-topic"
+      # MISCONFIGURATION: No KmsMasterKeyId property specified
+      # SSE is disabled by default for SNS
+      DisplayName: "Unencrypted SNS Topic"
+      Tags:
+        - Key: Misconfiguration
+          Value: "SNS-Encryption-Disabled"
+        - Key: Severity
+          Value: "MEDIUM"
+
+  # MISCONFIGURATION 2: SNS FIFO topic with encryption disabled
+  UnencryptedFIFOSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: "unencrypted-fifo-sns-topic.fifo"
+      FifoTopic: true
+      ContentBasedDeduplication: false
+      # MISCONFIGURATION: No encryption enabled
+      Tags:
+        - Key: Misconfiguration
+          Value: "SNS-FIFO-Encryption-Disabled"
+
+  # MISCONFIGURATION 3: SNS topic with delivery to SQS (both unencrypted)
+  UnencryptedSNSWithSQS:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: "unencrypted-sns-to-sqs"
+      # MISCONFIGURATION: No KmsMasterKeyId
+      Subscription:
+        - Endpoint: !GetAtt UnencryptedSQSQueue.Arn
+          Protocol: sqs
+      Tags:
+        - Key: Misconfiguration
+          Value: "SNS-SQS-Both-Unencrypted"
+
+  # SQS queue for subscription (also unencrypted - compounding issue)
+  UnencryptedSQSQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: "unencrypted-sqs-for-sns"
+      # MISCONFIGURATION: SQS also unencrypted
+
+  # SQS queue policy to allow SNS to publish
+  SQSQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: "sns.amazonaws.com"
+            Action: "sqs:SendMessage"
+            Resource: !GetAtt UnencryptedSQSQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref UnencryptedSNSWithSQS
+      Queues:
+        - !Ref UnencryptedSQSQueue
+
+  # Sample Lambda to publish sensitive messages
+  SampleLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: "sns-publisher-lambda"
+      Handler: "index.handler"
+      Runtime: "python3.9"
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TOPIC_ARN: !Ref UnencryptedSNSTopic
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          
+          def handler(event, context):
+              sns = boto3.client('sns')
+              
+              # Publishing sensitive data to unencrypted SNS topic
+              # Message will be stored WITHOUT encryption
+              response = sns.publish(
+                  TopicArn=event.get('TOPIC_ARN'),
+                  Message=json.dumps({
+                      'user_id': '12345',
+                      'credit_card': '4111111111111111',
+                      'cvv': '123',
+                      'expiry': '12/2025',
+                      'ssn': '123-45-6789'
+                  }),
+                  Subject='Sensitive Financial Data'
+              )
+              print(f"Message published: {response['MessageId']}")
+              
+              return {'statusCode': 200, 'body': 'Message published to unencrypted topic'}
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SNSPublishPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref UnencryptedSNSTopic
+
+  # Example of CORRECT configuration with encryption (commented)
+  # EncryptedSNSTopic:
+  #   Type: AWS::SNS::Topic
+  #   Properties:
+  #     TopicName: "encrypted-sns-topic"
+  #     KmsMasterKeyId: "alias/aws/sns"  # AWS managed key for SNS
+  #     # OR use customer managed KMS key (more secure for sensitive data)
+  #     # KmsMasterKeyId: !GetAtt CustomerKMSKey.Arn
+
+Outputs:
+  TopicName:
+    Description: "SNS topic with encryption disabled"
+    Value: !Ref UnencryptedSNSTopic
+  TopicArn:
+    Description: "ARN of unencrypted SNS topic"
+    Value: !Ref UnencryptedSNSTopic
+  FIFOTopicName:
+    Description: "FIFO SNS topic with encryption disabled"
+    Value: !Ref UnencryptedFIFOSNSTopic
+  RiskDescription:
+    Description: "Why this is dangerous"
+    Value: |
+      SNS messages are stored unencrypted at rest:
+      - Sensitive data in messages (PII, financial data, credentials) is exposed
+      - Anyone with disk access can read raw message data
+      - Messages persist in SNS for up to 7 days (unencrypted)
+      - Compliance violations for unencrypted data
+      - If SNS delivers to unencrypted SQS (as shown), data is doubly exposed
+      
+      Common sensitive data found in SNS messages:
+      - User PII (names, addresses, SSNs, emails, phone numbers)
+      - Financial transactions (credit cards, amounts, bank accounts)
+      - Authentication tokens and passwords
+      - Healthcare data (PHI, patient records, diagnoses)
+      - Internal API keys and secrets
+      - Security alerts and incident data
+  AttackScenario:
+    Description: "How data can be exposed"
+    Value: |
+      Scenario 1 - SNS Topic Access:
+      1. Attacker compromises IAM user with sns:Receive permission
+      2. Attacker subscribes their own endpoint to the topic
+      3. All new messages are delivered to attacker in plaintext
+      4. Attacker receives sensitive data in real-time
+      
+      Scenario 2 - Storage Access:
+      1. Attacker gains physical access to AWS storage
+      2. SNS message data stored unencrypted on disk
+      3. Attacker reads historical message data
+      
+      Scenario 3 - SQS Subscription Chain:
+      1. SNS publishes to unencrypted SQS queue (as shown in this template)
+      2. SQS also unencrypted compounds the risk
+      3. Attacker reads messages from either service
+  RemediationCommand:
+    Description: "Fix: Enable SSE on SNS topic"
+    Value: |
+      # Step 1: Enable SSE with AWS managed KMS key
+      aws sns set-topic-attributes \
+        --topic-arn <TOPIC_ARN> \
+        --attribute-name KmsMasterKeyId \
+        --attribute-value alias/aws/sns
+      
+      # Step 2: Verify encryption is enabled
+      aws sns get-topic-attributes \
+        --topic-arn <TOPIC_ARN> \
+        --attribute-names KmsMasterKeyId
+      
+      # Step 3: For new topics, enable encryption at creation
+      # Using AWS managed key:
+      # aws sns create-topic --name encrypted-topic --attributes '{"KmsMasterKeyId":"alias/aws/sns"}'
+      
+      # Using customer managed KMS key (more secure for sensitive data):
+      # aws sns create-topic --name encrypted-topic --attributes '{"KmsMasterKeyId":"arn:aws:kms:region:account:key/key-id"}'
+      
+      # Step 4: Also encrypt the SQS queue if subscribed
+      # aws sqs set-queue-attributes --queue-url <QUEUE_URL> --attributes '{"KmsMasterKeyId":"alias/aws/sqs"}'
+  EnableEncryptionConsole:
+    Description: "Steps to enable in AWS Console"
+    Value: |
+      1. Open SNS Console
+      2. Select your topic
+      3. Click "Edit"
+      4. Under "Encryption", select "Enable server-side encryption"
+      5. Choose KMS key (AWS managed SNS key or custom)
+      6. Click "Save changes"
+  ComplianceViolation:
+    Description: "Compliance frameworks requiring SNS encryption"
+    Value: "PCI DSS (Requirement 3.4 - encrypt cardholder data), HIPAA (encrypt PHI at rest), GDPR (Article 32), SOC 2 (CC6.1), FedRAMP"
