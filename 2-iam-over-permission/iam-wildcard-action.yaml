@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - IAM policy with wildcard Action (*) allowing all actions
+
+Metadata:
+  Misconfiguration:
+    Category: "IAM & Access Over-Permission"
+    Severity: "HIGH"
+    RuleId: "IAM-001"
+    Description: "IAM policy allows ALL actions (*) which is overly permissive and violates least privilege principle"
+    Remediation: "Replace '*' with specific actions like s3:GetObject, ec2:DescribeInstances, etc."
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "Action: '*'"
+      - "Action: [*]"
+      - "Effect: Allow"
+      - "Principal:"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: IAM User with overly permissive policy
+  OverPermissiveUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: "wildcard-action-user"
+      Tags:
+        - Key: Misconfiguration
+          Value: "IAM-Wildcard-Action"
+
+  # MISCONFIGURATION: Policy with Action: "*"
+  WildcardActionPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "WildcardActionPolicy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            # MISCONFIGURATION: This allows EVERY AWS action
+            Action: "*"
+            # MISCONFIGURATION: This allows access to EVERY resource
+            Resource: "*"
+      Users:
+        - !Ref OverPermissiveUser
+  # MISCONFIGURATION END
+
+  # Also creating an access key for this user (so it can be used)
+  UserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref OverPermissiveUser
+
+Outputs:
+  Username:
+    Description: "Name of over-permissive user"
+    Value: !Ref OverPermissiveUser
+  AccessKeyId:
+    Description: "Access Key ID (store securely for testing)"
+    Value: !Ref UserAccessKey
+  SecretAccessKey:
+    Description: "Secret Access Key (store securely for testing)"
+    Value: !GetAtt UserAccessKey.SecretAccessKey
+  RemediationCommand:
+    Description: "Fix: Delete the policy or replace with specific actions"
+    Value: !Sub "aws iam delete-user-policy --user-name wildcard-action-user --policy-name WildcardActionPolicy"
