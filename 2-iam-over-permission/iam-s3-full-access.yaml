@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - IAM user with inline s3:* access (full S3 permissions)
+
+Metadata:
+  Misconfiguration:
+    Category: "IAM & Access Over-Permission"
+    Severity: "HIGH"
+    RuleId: "IAM-005"
+    Description: "IAM user has s3:* permission - can perform ANY S3 action on ANY S3 resource in the account"
+    Remediation: "Replace s3:* with specific actions like s3:GetObject, s3:PutObject, and restrict to specific bucket ARNs"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "s3:*"
+      - "Action: s3:*"
+      - "Action: 's3:*'"
+      - "s3:GetObject"
+      - "s3:PutObject"
+      - "s3:DeleteObject"
+      - "s3:ListBucket"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: IAM User with full S3 access
+  S3FullAccessUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: "s3-full-access-user"
+      Tags:
+        - Key: Misconfiguration
+          Value: "IAM-S3-Full-Access"
+
+  # MISCONFIGURATION: Inline policy with s3:* access
+  S3FullAccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "S3FullAccessPolicy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            # MISCONFIGURATION: s3:* means ALL S3 actions
+            Action: "s3:*"
+            # MISCONFIGURATION: Resource wildcard means ALL S3 buckets and objects
+            Resource:
+              - "arn:aws:s3:::*"
+              - "arn:aws:s3:::*/*"
+      Users:
+        - !Ref S3FullAccessUser
+  # MISCONFIGURATION END
+
+  # Create an access key for this user
+  UserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref S3FullAccessUser
+
+Outputs:
+  Username:
+    Description: "Name of user with full S3 access"
+    Value: !Ref S3FullAccessUser
+  AccessKeyId:
+    Description: "Access Key ID"
+    Value: !Ref UserAccessKey
+  SecretAccessKey:
+    Description: "Secret Access Key"
+    Value: !GetAtt UserAccessKey.SecretAccessKey
+  WhatThisUserCanDo:
+    Description: "This user can perform ANY S3 action on ANY bucket"
+    Value: "List, Read, Write, Delete, Modify permissions on ALL S3 buckets"
+  SpecificActionsUserCanDo:
+    Description: "Examples of what this user can do"
+    Value: |
+      - List all buckets: aws s3 ls
+      - Read any object: aws s3 cp s3://any-bucket/file.txt .
+      - Upload any object: aws s3 cp file.txt s3://any-bucket/
+      - Delete any object: aws s3 rm s3://any-bucket/file.txt
+      - Delete entire bucket: aws s3 rb s3://any-bucket --force
+      - Change bucket policies: aws s3api put-bucket-policy
+  RemediationCommand:
+    Description: "Fix: Delete this policy or restrict to specific buckets/actions"
+    Value: !Sub "aws iam delete-user-policy --user-name s3-full-access-user --policy-name S3FullAccessPolicy"
