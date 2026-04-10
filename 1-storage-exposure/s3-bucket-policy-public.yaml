@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - S3 bucket with bucket policy allowing public access via Principal: "*"
+
+# METADATA - For research tracking and automated detection
+Metadata:
+  Misconfiguration:
+    Category: "Storage Exposure"
+    Severity: "CRITICAL"
+    RuleId: "S3-004"
+    Description: "S3 bucket policy uses Principal: '*' which grants access to anyone on the internet"
+    Remediation: "Remove Principal: '*' and replace with specific IAM users, roles, or AWS accounts"
+
+Resources:
+  PublicPolicyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "bucket-policy-public-${AWS::AccountId}"
+      
+      # MISCONFIGURATION: Block Public Access is disabled (allows public policies)
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false      # MISCONFIGURATION: Allows public policies to be attached
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      # MISCONFIGURATION END
+
+  # MISCONFIGURATION START: Bucket policy with Principal: "*"
+  PublicBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PublicPolicyBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            # MISCONFIGURATION: Principal "*" means ANYONE on the internet
+            Principal: "*"
+            Action:
+              - "s3:GetObject"
+              - "s3:ListBucket"
+            # MISCONFIGURATION: Resource includes bucket and all objects
+            Resource:
+              - !Sub "arn:aws:s3:::${PublicPolicyBucket}"
+              - !Sub "arn:aws:s3:::${PublicPolicyBucket}/*"
+            Condition:
+              # Optional: IP restriction (but still public)
+              IpAddress:
+                aws:SourceIp: "0.0.0.0/0"
+      # MISCONFIGURATION END
+
+  # Alternative: More dangerous policy with write access (commented but documented)
+  # DangerousPolicyExample:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref PublicPolicyBucket
+  #     PolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: "Allow"
+  #           Principal: "*"
+  #           Action:
+  #             - "s3:PutObject"
+  #             - "s3:DeleteObject"
+  #           Resource: !Sub "arn:aws:s3:::${PublicPolicyBucket}/*"
+
+# MISCONFIGURATION EXPLANATION:
+#
+# Principal: "*" means:
+# - ANYONE with an internet connection can access this bucket
+# - No AWS account required
+# - No IAM user required
+# - No authentication of any kind
+#
+# This is different from PublicRead ACL (File #1) which uses ACLs
+# This uses Bucket Policy which is more flexible and powerful
+
+Outputs:
+  BucketName:
+    Description: "Name of publicly accessible bucket"
+    Value: !Ref PublicPolicyBucket
+  BucketArn:
+    Description: "ARN of the bucket"
+    Value: !Sub "arn:aws:s3:::${PublicPolicyBucket}"
+  PublicAccessUrl:
+    Description: "Public URL (anyone can access)"
+    Value: !Sub "https://${PublicPolicyBucket}.s3.${AWS::Region}.amazonaws.com/"
+  TestPublicAccessCommand:
+    Description: "Command to test public access (no AWS credentials needed)"
+    Value: !Sub "curl https://${PublicPolicyBucket}.s3.${AWS::Region}.amazonaws.com/"
+  RemediationCommand:
+    Description: "Fix: Delete the bucket policy"
+    Value: !Sub "aws s3api delete-bucket-policy --bucket ${PublicPolicyBucket}"
