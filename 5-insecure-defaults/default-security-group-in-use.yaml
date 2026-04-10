@@ -1,0 +1,258 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - Default security group with open inbound rules in use
+
+Metadata:
+  Misconfiguration:
+    Category: "Insecure Defaults"
+    Severity: "HIGH"
+    RuleId: "EC2-002"
+    Description: "Default security group is being used for EC2 instances. Default security group has permissive rules allowing all inbound traffic from other instances in the same group and all outbound traffic to anywhere."
+    Remediation: "Create custom security groups with least-privilege rules. Do not use default security group for any workload."
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "default security group"
+      - "GroupId"
+      - "VpcId"
+      - "SecurityGroupIngress"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: Using default security group
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: "Default-SG-VPC"
+
+  # MISCONFIGURATION: EC2 instance using default security group
+  # Note: Default security group exists automatically in every VPC
+  # This template uses the default group by referencing it via !GetAtt or !Ref
+  # In practice, you would reference the actual default security group ID
+  
+  # To demonstrate, we create a custom security group that mimics default behavior
+  # Default security group has:
+  # 1. Inbound: Allow all traffic from other instances in the same group
+  # 2. Outbound: Allow all traffic to anywhere (0.0.0.0/0)
+  
+  # MISCONFIGURATION: Security group that mimics default permissive rules
+  DefaultLikeSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Mimics default security group - PERMISSIVE"
+      VpcId: !Ref VPC
+      # MISCONFIGURATION: Allows ALL inbound traffic from same group
+      SecurityGroupIngress:
+        - IpProtocol: "-1"
+          SourceSecurityGroupId: !Ref DefaultLikeSecurityGroup
+      # MISCONFIGURATION: Allows ALL outbound traffic to anywhere
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Name
+          Value: "Default-Like-Security-Group"
+        - Key: Misconfiguration
+          Value: "Using-Default-SG"
+
+  # EC2 instance using the default-like security group
+  EC2WithDefaultSG:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
+      SubnetId: !Ref PublicSubnet
+      # MISCONFIGURATION: Using default/permissive security group
+      SecurityGroupIds:
+        - !Ref DefaultLikeSecurityGroup
+      KeyName: "test-key"
+      Tags:
+        - Key: Name
+          Value: "Instance-With-Default-SG"
+        - Key: Misconfiguration
+          Value: "Default-SG-In-Use"
+
+  # Another EC2 instance using the same default-like security group
+  # This creates a scenario where both instances can talk to each other
+  EC2WithDefaultSG2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref DefaultLikeSecurityGroup
+      KeyName: "test-key"
+      Tags:
+        - Key: Name
+          Value: "Instance-With-Default-SG-2"
+        - Key: Misconfiguration
+          Value: "Default-SG-In-Use"
+
+  # Public subnet with auto-assign public IP (compound issue)
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: "Public-Subnet"
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+
+  # Example of CORRECT configuration (custom security group with least privilege)
+  # CorrectSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: "Least privilege security group"
+  #     VpcId: !Ref VPC
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: "10.0.0.0/16"
+  #     SecurityGroupEgress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: "0.0.0.0/0"
+
+# Mapping for AMI IDs per region
+Mappings:
+  AWSRegionArch2AMI:
+    us-east-1:
+      AMI: ami-0c02fb55956c7d316
+    us-west-2:
+      AMI: ami-0d70546e43a328d54
+    eu-west-1:
+      AMI: ami-07470b0ad10cbe60e
+
+Outputs:
+  DefaultLikeSGId:
+    Description: "Default-like security group ID (permissive)"
+    Value: !Ref DefaultLikeSecurityGroup
+  InstanceId1:
+    Description: "EC2 instance using default security group"
+    Value: !Ref EC2WithDefaultSG
+  InstanceId2:
+    Description: "Second EC2 instance using default security group"
+    Value: !Ref EC2WithDefaultSG2
+  RiskDescription:
+    Description: "Why default security group is dangerous"
+    Value: |
+      Default security group has permissive rules:
+      
+      INBOUND: Allows ALL traffic from other instances in the same group
+      - If one instance is compromised, attacker can move laterally to all others
+      - No network segmentation between application tiers
+      - Web servers can directly access databases
+      
+      OUTBOUND: Allows ALL traffic to ANYWHERE (0.0.0.0/0)
+      - Compromised instance can exfiltrate data to any external IP
+      - Can download malicious tools from internet
+      - Can connect to command and control (C2) servers
+      
+      DEFAULT SECURITY GROUP SHOULD NEVER BE USED FOR WORKLOADS
+  AttackScenario:
+    Description: "How attacker exploits default security group"
+    Value: |
+      Scenario 1 - Lateral Movement:
+      1. Attacker compromises web server (Instance A)
+      2. Both web server and database use default security group
+      3. Default SG allows ALL traffic between instances
+      4. Attacker connects from web server to database (no restriction)
+      5. Attacker steals all customer data from database
+      
+      Scenario 2 - Data Exfiltration:
+      1. Attacker compromises any instance using default SG
+      2. Default SG allows ALL outbound traffic to ANYWHERE
+      3. Attacker uploads customer data to attacker's server
+      4. No network restrictions to block exfiltration
+      5. Data stolen without triggering network alerts
+      
+      Scenario 3 - Malware Download:
+      1. Attacker gains foothold on instance
+      2. Instance can reach ANY external IP
+      3. Attacker downloads crypto mining software
+      4. Attacker installs and runs miner
+      5. Company gets unexpected high compute bill
+  RemediationCommand:
+    Description: "Fix: Create custom security groups and migrate resources"
+    Value: |
+      # Step 1: Create custom security group with least privilege
+      aws ec2 create-security-group \
+        --group-name web-server-sg \
+        --description "Security group for web servers" \
+        --vpc-id <VPC_ID>
+      
+      # Step 2: Add specific inbound rules
+      aws ec2 authorize-security-group-ingress \
+        --group-id <CUSTOM_SG_ID> \
+        --protocol tcp \
+        --port 443 \
+        --cidr 0.0.0.0/0
+      
+      # Step 3: Add specific outbound rules
+      aws ec2 authorize-security-group-egress \
+        --group-id <CUSTOM_SG_ID> \
+        --protocol tcp \
+        --port 443 \
+        --cidr 0.0.0.0/0
+      
+      # Step 4: Update instances to use custom security group
+      aws ec2 modify-instance-attribute \
+        --instance-id <INSTANCE_ID> \
+        --groups <CUSTOM_SG_ID>
+      
+      # Step 5: Remove instances from default security group
+  BestPractice:
+    Description: "Security group best practices"
+    Value: |
+      1. NEVER use default security group for any workload
+      2. Create separate security groups for each application tier
+      3. Apply least privilege principle (only allow necessary ports)
+      4. Restrict outbound traffic to only required destinations
+      5. Use security group references instead of CIDR for internal traffic
+      6. Regularly audit security group rules
+      7. Remove unused security groups
+  WhatDefaultSGAllows:
+    Description: "Default security group rules"
+    Value: |
+      Inbound: Allow all traffic from other instances in default security group
+      Outbound: Allow all traffic to 0.0.0.0/0 (anywhere on internet)
+      This means no network isolation between resources using default SG
