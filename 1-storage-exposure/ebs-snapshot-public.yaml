@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - EBS snapshot shared publicly with all AWS accounts
+
+# METADATA - For research tracking and automated detection
+Metadata:
+  Misconfiguration:
+    Category: "Storage Exposure"
+    Severity: "CRITICAL"
+    RuleId: "EBS-001"
+    Description: "EBS snapshot is shared publicly with all AWS accounts"
+    Remediation: "Modify snapshot permissions to private or specific accounts only"
+
+Resources:
+  PublicSnapshot:
+    Type: AWS::EC2::Snapshot
+    Properties:
+      Description: "MISCONFIGURATION - Publicly shared EBS snapshot"
+      VolumeId: !Ref SourceVolume
+      
+      # MISCONFIGURATION START: Storage is required but actual snapshot will be created from volume
+      # The misconfiguration is applied after creation via modify_snapshot_attribute API
+      # This CloudFormation template documents the intention
+
+  SourceVolume:
+    Type: AWS::EC2::Volume
+    Properties:
+      Size: 10
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      Encrypted: false
+
+# MISCONFIGURATION NOTE: 
+# After stack creation, the snapshot is made public using:
+# aws ec2 modify-snapshot-attribute --snapshot-id <SNAPSHOT_ID> --attribute createVolumePermission --operation-type add --group-names all
+#
+# The above command allows ALL AWS accounts to create volumes from this snapshot
+# This exposes any sensitive data stored in the snapshot
+
+Outputs:
+  SnapshotId:
+    Description: "Snapshot ID that needs to be made public"
+    Value: !Ref PublicSnapshot
+  PublicCommand:
+    Description: "Command to make this snapshot publicly accessible (MISCONFIGURATION)"
+    Value: !Sub "aws ec2 modify-snapshot-attribute --snapshot-id ${PublicSnapshot} --attribute createVolumePermission --operation-type add --group-names all"
