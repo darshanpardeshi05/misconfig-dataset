@@ -1,0 +1,143 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - Individual S3 object with public read ACL (bucket is private, but specific object is public)
+
+# METADATA - For research tracking and automated detection
+Metadata:
+  Misconfiguration:
+    Category: "Storage Exposure"
+    Severity: "HIGH"
+    RuleId: "S3-005"
+    Description: "Individual S3 object has public read ACL even though bucket is private"
+    Remediation: "Set object ACL to private using put-object-acl command"
+
+Resources:
+  # Parent bucket is PRIVATE (secure)
+  PrivateBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "private-bucket-with-public-object-${AWS::AccountId}"
+      
+      # Bucket-level Block Public Access is ENABLED (secure)
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # MISCONFIGURATION NOTE:
+  # CloudFormation does not directly support setting object-level ACLs.
+  # The misconfiguration must be applied AFTER bucket creation using AWS CLI or SDK.
+  #
+  # Steps to create this misconfiguration:
+  # 1. Upload a file to the S3 bucket
+  # 2. Run command to make that specific object public
+  #
+  # Command to make object public:
+  # aws s3api put-object-acl --bucket <BUCKET_NAME> --key <FILE_NAME> --acl public-read
+
+  # Sample object uploaded via custom resource (alternative method)
+  SampleObjectUpload:
+    Type: Custom::S3ObjectUpload
+    Properties:
+      ServiceToken: !GetAtt UploadFunction.Arn
+      BucketName: !Ref PrivateBucket
+      ObjectKey: "sensitive-document.pdf"
+      ObjectContent: "This is a sensitive document that should not be public"
+
+  # Lambda function to upload object (for demonstration)
+  UploadFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import urllib.parse
+          
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Create':
+                      s3 = boto3.client('s3')
+                      bucket = event['ResourceProperties']['BucketName']
+                      key = event['ResourceProperties']['ObjectKey']
+                      content = event['ResourceProperties']['ObjectContent']
+                      
+                      # Upload object to S3
+                      s3.put_object(
+                          Bucket=bucket,
+                          Key=key,
+                          Body=content.encode('utf-8'),
+                          ContentType='application/pdf'
+                      )
+                      
+                      # MISCONFIGURATION START: Make this specific object public
+                      # This is the actual misconfiguration - individual object ACL
+                      s3.put_object_acl(
+                          Bucket=bucket,
+                          Key=key,
+                          ACL='public-read'    # MISCONFIGURATION: Object is publicly readable
+                      )
+                      # MISCONFIGURATION END
+                      
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3UploadPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Resource: !Sub "arn:aws:s3:::${PrivateBucket}/*"
+
+# MISCONFIGURATION EXPLANATION:
+#
+# This scenario is DANGEROUS because:
+# 1. The bucket appears secure (Block Public Access = true)
+# 2. Security scanners might only check bucket-level settings
+# 3. Individual objects can still be public even when bucket is private
+# 4. This is often overlooked during security audits
+#
+# How this happens in real world:
+# - Developer uploads a file and accidentally checks "Make public"
+# - Script or CLI command includes --acl public-read for a specific file
+# - Legacy application explicitly sets object ACLs to public
+
+Outputs:
+  BucketName:
+    Description: "Private bucket name"
+    Value: !Ref PrivateBucket
+  PublicObjectUrl:
+    Description: "URL of the publicly accessible object (anyone can view)"
+    Value: !Sub "https://${PrivateBucket}.s3.${AWS::Region}.amazonaws.com/sensitive-document.pdf"
+  TestPublicAccessCommand:
+    Description: "Command to test public access (no AWS credentials needed)"
+    Value: !Sub "curl https://${PrivateBucket}.s3.${AWS::Region}.amazonaws.com/sensitive-document.pdf"
+  FixMisconfigurationCommand:
+    Description: "Command to fix: Make object private"
+    Value: !Sub "aws s3api put-object-acl --bucket ${PrivateBucket} --key sensitive-document.pdf --acl private"
+  FindAllPublicObjectsCommand:
+    Description: "Command to find all public objects in bucket"
+    Value: !Sub "aws s3api list-objects --bucket ${PrivateBucket} --query 'Contents[?PublicRead==`true`]'"
