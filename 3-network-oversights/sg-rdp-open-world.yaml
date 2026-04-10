@@ -1,0 +1,151 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - Security group allows RDP (port 3389) from 0.0.0.0/0 (anyone on internet)
+
+Metadata:
+  Misconfiguration:
+    Category: "Network Oversights"
+    Severity: "HIGH"
+    RuleId: "SG-002"
+    Description: "Security group allows RDP access from entire internet (0.0.0.0/0). This exposes Windows EC2 instances to brute force attacks."
+    Remediation: "Restrict RDP access to specific IP addresses or VPN ranges only"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "port 3389"
+      - "0.0.0.0/0"
+      - "CidrIp: 0.0.0.0/0"
+      - "FromPort: 3389"
+      - "ToPort: 3389"
+      - "RDP"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: Security group with RDP open to entire internet
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: "Network-Misconfig-VPC"
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: "Public-Subnet"
+
+  # MISCONFIGURATION: Security group allowing RDP from anywhere
+  RDPOpenSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "MISCONFIGURATION - RDP open to world"
+      VpcId: !Ref VPC
+      # MISCONFIGURATION START: RDP port 3389 open to 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: "0.0.0.0/0"      # MISCONFIGURATION: Anyone can RDP
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIpv6: "::/0"         # MISCONFIGURATION: IPv6 also open
+      # MISCONFIGURATION END
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Misconfiguration
+          Value: "SG-RDP-Open-World"
+
+  # Windows EC2 instance using this insecure security group
+  ExposedWindowsInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "WindowsAMI"]
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref RDPOpenSecurityGroup
+      KeyName: "test-key"  # User must create this key pair
+      Tags:
+        - Key: Name
+          Value: "Exposed-RDP-Instance"
+        - Key: Misconfiguration
+          Value: "RDP-Exposed"
+
+  # Internet Gateway for public access
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+
+# Mapping for AMI IDs per region
+Mappings:
+  AWSRegionArch2AMI:
+    us-east-1:
+      WindowsAMI: ami-00c0b2e1e8f6a7b9d
+      LinuxAMI: ami-0c02fb55956c7d316
+    us-west-2:
+      WindowsAMI: ami-0a2e7d6e8f9a4b2c1
+      LinuxAMI: ami-0d70546e43a328d54
+    eu-west-1:
+      WindowsAMI: ami-0b1c2d3e4f5a6b7c8
+      LinuxAMI: ami-07470b0ad10cbe60e
+
+Outputs:
+  SecurityGroupId:
+    Description: "Security group ID with RDP open to world"
+    Value: !Ref RDPOpenSecurityGroup
+  ExposedInstanceId:
+    Description: "Windows EC2 instance exposed to RDP attacks"
+    Value: !Ref ExposedWindowsInstance
+  RiskDescription:
+    Description: "Why this is dangerous"
+    Value: "Anyone on internet can attempt RDP into this Windows instance. Attackers constantly scan for port 3389 and attempt brute force attacks on Windows credentials."
+  AttackScenario:
+    Description: "How attacker exploits this"
+    Value: |
+      1. Attacker scans AWS IP ranges for open port 3389
+      2. Attacker finds your Windows instance IP
+      3. Attacker runs brute force attack on RDP (tries common passwords)
+      4. If weak password → attacker gains Windows access
+      5. Attacker can steal data, install ransomware, use as botnet
+  RemediationCommand:
+    Description: "Fix: Restrict RDP to specific IPs"
+    Value: "aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 3389 --cidr 0.0.0.0/0 && aws ec2 authorize-security-group-ingress --group-id <SG_ID> --protocol tcp --port 3389 --cidr YOUR_IP/32"
+  CheckOpenRDPCommand:
+    Description: "Command to find all security groups with RDP open"
+    Value: "aws ec2 describe-security-groups --filters Name=ip-permission.from-port,Values=3389 Name=ip-permission.cidr,Values='0.0.0.0/0'"
