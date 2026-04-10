@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - Security group allows PostgreSQL (port 5432) from 0.0.0.0/0 (anyone on internet)
+
+Metadata:
+  Misconfiguration:
+    Category: "Network Oversights"
+    Severity: "CRITICAL"
+    RuleId: "SG-004"
+    Description: "Security group allows PostgreSQL access from entire internet (0.0.0.0/0). This exposes databases to direct attack and data theft."
+    Remediation: "Restrict PostgreSQL access to specific application servers or VPC CIDR only. Databases should never be publicly accessible."
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "port 5432"
+      - "0.0.0.0/0"
+      - "CidrIp: 0.0.0.0/0"
+      - "FromPort: 5432"
+      - "ToPort: 5432"
+      - "PostgreSQL"
+      - "Postgres"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: Security group with PostgreSQL open to entire internet
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: "Network-Misconfig-VPC"
+
+  # MISCONFIGURATION: Security group allowing PostgreSQL from anywhere
+  PostgresOpenSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "MISCONFIGURATION - PostgreSQL open to world"
+      VpcId: !Ref VPC
+      # MISCONFIGURATION START: PostgreSQL port 5432 open to 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: "0.0.0.0/0"      # MISCONFIGURATION: Anyone can access PostgreSQL
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIpv6: "::/0"         # MISCONFIGURATION: IPv6 also open
+      # MISCONFIGURATION END
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Misconfiguration
+          Value: "SG-PostgreSQL-Open-World"
+
+  # RDS PostgreSQL database exposed to internet
+  ExposedPostgresDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: "exposed-postgres-db"
+      DBInstanceClass: db.t3.micro
+      Engine: postgres
+      EngineVersion: "15"
+      MasterUsername: "postgres"
+      MasterUserPassword: "WeakPassword123!"
+      AllocatedStorage: 20
+      StorageEncrypted: false           # MISCONFIGURATION: Not encrypted
+      PubliclyAccessible: true          # MISCONFIGURATION: Publicly accessible
+      VPCSecurityGroups:
+        - !Ref PostgresOpenSecurityGroup
+      DBSubnetGroupName: !Ref PublicDBSubnetGroup
+      Tags:
+        - Key: Misconfiguration
+          Value: "PostgreSQL-Publicly-Accessible"
+
+  # Public subnet group for RDS
+  PublicDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Public subnet group - MISCONFIGURATION"
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      MapPublicIpOnLaunch: true
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}b"
+      MapPublicIpOnLaunch: true
+
+  # Internet Gateway for public access
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref RouteTable
+
+  SubnetRouteAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref RouteTable
+
+Outputs:
+  SecurityGroupId:
+    Description: "Security group ID with PostgreSQL open to world"
+    Value: !Ref PostgresOpenSecurityGroup
+  DatabaseEndpoint:
+    Description: "Exposed PostgreSQL database endpoint"
+    Value: !GetAtt ExposedPostgresDatabase.Endpoint.Address
+  DatabasePort:
+    Description: "PostgreSQL port (5432)"
+    Value: !GetAtt ExposedPostgresDatabase.Endpoint.Port
+  RiskDescription:
+    Description: "Why this is CRITICAL"
+    Value: "PostgreSQL database is accessible from ANYWHERE on internet. Attackers can attempt to connect, brute force passwords, and steal all data."
+  AttackScenario:
+    Description: "How attacker exploits this"
+    Value: |
+      1. Attacker scans for open port 5432 on AWS IP ranges
+      2. Attacker finds your RDS endpoint
+      3. Attacker attempts to connect: psql -h your-db.aws.com -p 5432 -U postgres -d postgres
+      4. Attacker runs brute force on password
+      5. If successful → attacker dumps ALL database tables
+      6. Customer PII, financial data, credentials stolen
+  RemediationCommand:
+    Description: "Fix: Remove public access and restrict security group"
+    Value: |
+      # Make database private
+      aws rds modify-db-instance --db-instance-identifier exposed-postgres-db --no-publicly-accessible
+      # Remove world-open security group rule
+      aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 5432 --cidr 0.0.0.0/0
+  ConnectionTestCommand:
+    Description: "Test if database is publicly accessible (run from any internet connection)"
+    Value: "psql -h <DATABASE_ENDPOINT> -p 5432 -U postgres -d postgres"
