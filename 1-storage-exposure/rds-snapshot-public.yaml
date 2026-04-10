@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - RDS snapshot shared publicly with all AWS accounts
+
+# METADATA - For research tracking and automated detection
+Metadata:
+  Misconfiguration:
+    Category: "Storage Exposure"
+    Severity: "CRITICAL"
+    RuleId: "RDS-001"
+    Description: "RDS snapshot is shared publicly with all AWS accounts"
+    Remediation: "Modify snapshot permissions to private or specific accounts only"
+
+Resources:
+  # MISCONFIGURATION NOTE: 
+  # RDS snapshots cannot be made public directly in CloudFormation.
+  # The misconfiguration happens AFTER creation using AWS CLI, Console, or API.
+  #
+  # Steps to create this misconfiguration:
+  # 1. Create a DB instance (or use existing)
+  # 2. Create a snapshot of that DB
+  # 3. Share the snapshot with "All AWS accounts" using modify-db-snapshot-attribute
+  #
+  # Command to make snapshot public:
+  # aws rds modify-db-snapshot-attribute --db-snapshot-identifier <SNAPSHOT_ID> --attribute-name restore --values-to-add all
+
+  SampleDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: "sample-db-for-snapshot"
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: "8.0"
+      MasterUsername: "admin"
+      MasterUserPassword: "TempPassword123"
+      PubliclyAccessible: false
+      StorageEncrypted: false      # MISCONFIGURATION: Not encrypted
+      DBSubnetGroupName: !Ref DBSubnetGroup
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Subnet group for RDS"
+      SubnetIds:
+        - !Ref Subnet1
+        - !Ref Subnet2
+
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}a"
+
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}b"
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+# MISCONFIGURATION: After stack deployment, create a snapshot and share it publicly
+# 
+# Step 1: Create snapshot from SampleDatabase
+# Step 2: Run this command to make snapshot public:
+# aws rds modify-db-snapshot-attribute --db-snapshot-identifier <SNAPSHOT_ID> --attribute-name restore --values-to-add all
+
+Outputs:
+  DatabaseEndpoint:
+    Description: "RDS endpoint (for creating snapshot)"
+    Value: !GetAtt SampleDatabase.Endpoint.Address
+  MakePublicCommand:
+    Description: "Command to make RDS snapshot public (MISCONFIGURATION)"
+    Value: "aws rds modify-db-snapshot-attribute --db-snapshot-identifier <SNAPSHOT_ID> --attribute-name restore --values-to-add all"
