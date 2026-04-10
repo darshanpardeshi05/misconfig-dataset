@@ -1,0 +1,148 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - Security group allows SSH (port 22) from 0.0.0.0/0 (anyone on internet)
+
+Metadata:
+  Misconfiguration:
+    Category: "Network Oversights"
+    Severity: "HIGH"
+    RuleId: "SG-001"
+    Description: "Security group allows SSH access from entire internet (0.0.0.0/0). This exposes EC2 instances to brute force attacks."
+    Remediation: "Restrict SSH access to specific IP addresses or VPN ranges only"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "port 22"
+      - "0.0.0.0/0"
+      - "CidrIp: 0.0.0.0/0"
+      - "FromPort: 22"
+      - "ToPort: 22"
+      - "SSH"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: Security group with SSH open to entire internet
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: "Network-Misconfig-VPC"
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: "Public-Subnet"
+
+  # MISCONFIGURATION: Security group allowing SSH from anywhere
+  SSLOpenSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "MISCONFIGURATION - SSH open to world"
+      VpcId: !Ref VPC
+      # MISCONFIGURATION START: SSH port 22 open to 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: "0.0.0.0/0"      # MISCONFIGURATION: Anyone can SSH
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIpv6: "::/0"         # MISCONFIGURATION: IPv6 also open
+      # MISCONFIGURATION END
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Misconfiguration
+          Value: "SG-SSH-Open-World"
+
+  # EC2 instance using this insecure security group
+  ExposedEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref SSLOpenSecurityGroup
+      KeyName: "test-key"  # User must create this key pair
+      Tags:
+        - Key: Name
+          Value: "Exposed-SSH-Instance"
+        - Key: Misconfiguration
+          Value: "SSH-Exposed"
+
+  # Internet Gateway for public access
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+
+# Mapping for AMI IDs per region
+Mappings:
+  AWSRegionArch2AMI:
+    us-east-1:
+      AMI: ami-0c02fb55956c7d316
+    us-west-2:
+      AMI: ami-0d70546e43a328d54
+    eu-west-1:
+      AMI: ami-07470b0ad10cbe60e
+
+Outputs:
+  SecurityGroupId:
+    Description: "Security group ID with SSH open to world"
+    Value: !Ref SSLOpenSecurityGroup
+  ExposedInstanceId:
+    Description: "EC2 instance exposed to SSH attacks"
+    Value: !Ref ExposedEC2Instance
+  RiskDescription:
+    Description: "Why this is dangerous"
+    Value: "Anyone on internet can attempt to SSH into this instance. Attackers constantly scan for port 22 and attempt brute force attacks."
+  AttackScenario:
+    Description: "How attacker exploits this"
+    Value: |
+      1. Attacker scans AWS IP ranges for open port 22
+      2. Attacker finds your instance IP
+      3. Attacker runs brute force attack on SSH
+      4. If weak password or vulnerable key → attacker gains access
+      5. Attacker uses instance as foothold to attack other resources
+  RemediationCommand:
+    Description: "Fix: Restrict SSH to specific IPs"
+    Value: "aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 22 --cidr 0.0.0.0/0 && aws ec2 authorize-security-group-ingress --group-id <SG_ID> --protocol tcp --port 22 --cidr YOUR_IP/32"
+  CheckOpenSSHCommand:
+    Description: "Command to find all security groups with SSH open"
+    Value: "aws ec2 describe-security-groups --filters Name=ip-permission.from-port,Values=22 Name=ip-permission.cidr,Values='0.0.0.0/0'"
