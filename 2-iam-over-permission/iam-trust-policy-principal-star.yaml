@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - IAM role trust policy with Principal: "*" allowing ANYONE to assume the role
+
+Metadata:
+  Misconfiguration:
+    Category: "IAM & Access Over-Permission"
+    Severity: "CRITICAL"
+    RuleId: "IAM-011"
+    Description: "IAM role trust policy uses Principal: '*' which allows ANY AWS account or ANY user to assume this role. This is extremely dangerous."
+    Remediation: "Replace Principal: '*' with specific AWS account IDs or specific IAM users/roles"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "Principal: '*'"
+      - "Principal: \"*\""
+      - "Principal: [*]"
+      - "sts:AssumeRole"
+      - "Trust policy"
+      - "AssumeRolePolicyDocument"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: IAM role with trust policy allowing ANYONE to assume it
+  
+  DangerousRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "dangerous-trust-policy-role"
+      # MISCONFIGURATION: Trust policy with Principal: "*"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            # MISCONFIGURATION: Principal "*" means ANY user from ANY AWS account
+            Principal: "*"
+            Action: "sts:AssumeRole"
+      # This role has admin permissions (making it even worse)
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AdministratorAccess"
+      Tags:
+        - Key: Misconfiguration
+          Value: "IAM-Trust-Policy-Principal-Star-CRITICAL"
+
+  # SECOND MISCONFIGURATION: Role with S3 full access (still dangerous)
+  DangerousS3Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "dangerous-s3-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: "*"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "S3FullAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "s3:*"
+                Resource: "*"
+      Tags:
+        - Key: Misconfiguration
+          Value: "IAM-Trust-Policy-Principal-Star"
+
+  # THIRD MISCONFIGURATION: Role with condition (slightly less dangerous but still bad)
+  DangerousRoleWithCondition:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "dangerous-role-with-condition"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: "*"
+            Action: "sts:AssumeRole"
+            # Condition only checks IP - still allows ANY user from that IP
+            Condition:
+              IpAddress:
+                "aws:SourceIp": "203.0.113.0/24"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
+      Tags:
+        - Key: Misconfiguration
+          Value: "IAM-Trust-Policy-Principal-Star-WithCondition"
+
+Outputs:
+  DangerousRoleName:
+    Description: "Role that ANYONE can assume (Admin access)"
+    Value: !Ref DangerousRole
+  DangerousRoleArn:
+    Description: "ARN of the dangerous role"
+    Value: !GetAtt DangerousRole.Arn
+  DangerousS3RoleName:
+    Description: "Role that ANYONE can assume (S3 access)"
+    Value: !Ref DangerousS3Role
+  RiskDescription:
+    Description: "Why this is CRITICAL"
+    Value: "ANY user from ANY AWS account can assume this role. Attackers can create their own AWS account (free) and assume your role."
+  AttackScenario:
+    Description: "How attacker exploits this"
+    Value: |
+      1. Attacker creates free AWS account
+      2. Attacker finds role ARN via reconnaissance (or guesses naming pattern)
+      3. Attacker runs: aws sts assume-role --role-arn YOUR_ROLE_ARN --role-session-name attack
+      4. Attacker receives temporary credentials
+      5. Attacker now has YOUR permissions (potentially admin)
+      6. Attacker steals data, launches resources, deletes everything
+  AssumeRoleCommand:
+    Description: "Command ANYONE can use to assume this role"
+    Value: !Sub "aws sts assume-role --role-arn ${GetAtt DangerousRole.Arn} --role-session-name test"
+  RemediationCommand:
+    Description: "Fix: Replace Principal: '*' with specific account IDs"
+    Value: !Sub "aws iam update-assume-role-policy --role-name ${DangerousRole} --policy-document '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::YOUR_ACCOUNT_ID:root\"},\"Action\":\"sts:AssumeRole\"}]}'"
+  EmergencyFix:
+    Description: "EMERGENCY: Delete the role immediately if found"
+    Value: !Sub "aws iam delete-role --role-name ${DangerousRole}"
