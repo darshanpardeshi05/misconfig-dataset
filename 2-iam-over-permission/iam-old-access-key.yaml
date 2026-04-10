@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - IAM access key older than 90 days not rotated
+
+Metadata:
+  Misconfiguration:
+    Category: "IAM & Access Over-Permission"
+    Severity: "MEDIUM"
+    RuleId: "IAM-010"
+    Description: "IAM access key is older than 90 days and has not been rotated. Long-lived keys increase risk of credential exposure."
+    Remediation: "Rotate access keys every 90 days. Create new key, update applications, delete old key."
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "AccessKey"
+      - "CreateDate"
+      - "Key rotation"
+      - "Old access key"
+      - "AccessKeyLastRotated"
+      - "> 90 days"
+      - "Not rotated"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: User with old access key (over 90 days)
+  
+  UserWithOldKey:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: "user-with-old-key"
+      Tags:
+        - Key: Misconfiguration
+          Value: "IAM-Old-Access-Key"
+        - Key: KeyCreatedDate
+          Value: "2024-01-01"  # Over 90 days ago from 2025-04-10
+
+  # MISCONFIGURATION: Access key created over 90 days ago
+  # CloudFormation doesn't track creation date directly, but this represents the scenario
+  OldAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref UserWithOldKey
+      Status: Active
+      # In real AWS, CreateDate would be >90 days ago
+    Metadata:
+      Comment: "This key was created on 2024-01-01 (over 90 days ago) - ROTATION REQUIRED"
+
+  # SECOND MISCONFIGURATION: Admin user with old key (more severe)
+  AdminUserWithOldKey:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: "admin-with-old-key"
+      Tags:
+        - Key: Misconfiguration
+          Value: "IAM-Admin-Old-Key"
+        - Key: KeyCreatedDate
+          Value: "2023-06-01"
+
+  OldAdminAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref AdminUserWithOldKey
+      Status: Active
+
+  # Admin policy attached to this user
+  AdminPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "AdminPolicy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action: "*"
+            Resource: "*"
+      Users:
+        - !Ref AdminUserWithOldKey
+
+  # THIRD MISCONFIGURATION: Service account with old key (application credential)
+  ServiceAccountOldKey:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: "service-account-old-key"
+      Tags:
+        - Key: Application
+          Value: "LegacyApp"
+        - Key: KeyCreatedDate
+          Value: "2023-01-15"
+
+  ServiceOldAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref ServiceAccountOldKey
+      Status: Active
+
+  # Policy for service account (limited but still a risk)
+  ServiceAccountPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "ServiceAccountPolicy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - "s3:GetObject"
+              - "s3:PutObject"
+            Resource: "arn:aws:s3:::my-app-bucket/*"
+      Users:
+        - !Ref ServiceAccountOldKey
+
+Outputs:
+  UserWithOldKey:
+    Description: "User with access key >90 days old"
+    Value: !Ref UserWithOldKey
+  AdminUserWithOldKey:
+    Description: "Admin user with old key (HIGHER risk)"
+    Value: !Ref AdminUserWithOldKey
+  ServiceAccountWithOldKey:
+    Description: "Service account with old key"
+    Value: !Ref ServiceAccountOldKey
+  RiskDescription:
+    Description: "Why this is dangerous"
+    Value: "Long-lived keys are more likely to be exposed via: code commits, log files, backup files, employee laptops, phishing"
+  AttackScenario:
+    Description: "How attacker exploits old keys"
+    Value: "1. Find exposed key in public GitHub repo | 2. Use key to access AWS | 3. Key has been valid for years (no rotation) | 4. Attacker maintains persistent access"
+  RotationRemediation:
+    Description: "Step-by-step key rotation"
+    Value: |
+      1. Create new access key: aws iam create-access-key --user-name USERNAME
+      2. Update applications to use new key
+      3. Verify everything works with new key
+      4. Delete old key: aws iam delete-access-key --user-name USERNAME --access-key-id OLD_KEY_ID
+      5. Set reminder for next rotation (90 days)
+  CheckKeyAgeCommand:
+    Description: "Command to check key age"
+    Value: "aws iam list-access-keys --user-name USERNAME --query 'AccessKeyMetadata[?CreateDate<=`2025-01-10`]'"
+  RemediationCommand:
+    Description: "Fix: Delete old access key"
+    Value: "aws iam update-access-key --user-name USERNAME --access-key-id KEY_ID --status Inactive && aws iam delete-access-key --user-name USERNAME --access-key-id KEY_ID"
