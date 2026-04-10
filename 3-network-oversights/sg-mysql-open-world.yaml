@@ -1,0 +1,170 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - Security group allows MySQL (port 3306) from 0.0.0.0/0 (anyone on internet)
+
+Metadata:
+  Misconfiguration:
+    Category: "Network Oversights"
+    Severity: "CRITICAL"
+    RuleId: "SG-003"
+    Description: "Security group allows MySQL access from entire internet (0.0.0.0/0). This exposes databases to direct attack."
+    Remediation: "Restrict MySQL access to specific application servers or VPC CIDR only. Databases should never be publicly accessible."
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "port 3306"
+      - "0.0.0.0/0"
+      - "CidrIp: 0.0.0.0/0"
+      - "FromPort: 3306"
+      - "ToPort: 3306"
+      - "MySQL"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: Security group with MySQL open to entire internet
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: "Network-Misconfig-VPC"
+
+  # MISCONFIGURATION: Security group allowing MySQL from anywhere
+  MySQLOpenSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "MISCONFIGURATION - MySQL open to world"
+      VpcId: !Ref VPC
+      # MISCONFIGURATION START: MySQL port 3306 open to 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: "0.0.0.0/0"      # MISCONFIGURATION: Anyone can access MySQL
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIpv6: "::/0"         # MISCONFIGURATION: IPv6 also open
+      # MISCONFIGURATION END
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Misconfiguration
+          Value: "SG-MySQL-Open-World"
+
+  # RDS MySQL database exposed to internet
+  ExposedMySQLDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: "exposed-mysql-db"
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: "8.0"
+      MasterUsername: "admin"
+      MasterUserPassword: "WeakPassword123!"
+      AllocatedStorage: 20
+      StorageEncrypted: false
+      PubliclyAccessible: true           # MISCONFIGURATION: Publicly accessible
+      VPCSecurityGroups:
+        - !Ref MySQLOpenSecurityGroup
+      DBSubnetGroupName: !Ref PublicDBSubnetGroup
+      Tags:
+        - Key: Misconfiguration
+          Value: "MySQL-Publicly-Accessible"
+
+  # Public subnet group for RDS
+  PublicDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Public subnet group - MISCONFIGURATION"
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      MapPublicIpOnLaunch: true
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}b"
+      MapPublicIpOnLaunch: true
+
+  # Internet Gateway for public access
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref RouteTable
+
+  SubnetRouteAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref RouteTable
+
+Outputs:
+  SecurityGroupId:
+    Description: "Security group ID with MySQL open to world"
+    Value: !Ref MySQLOpenSecurityGroup
+  DatabaseEndpoint:
+    Description: "Exposed MySQL database endpoint"
+    Value: !GetAtt ExposedMySQLDatabase.Endpoint.Address
+  DatabasePort:
+    Description: "MySQL port (3306)"
+    Value: !GetAtt ExposedMySQLDatabase.Endpoint.Port
+  RiskDescription:
+    Description: "Why this is CRITICAL"
+    Value: "MySQL database is accessible from ANYWHERE on internet. Attackers can attempt to connect, brute force passwords, and steal all data."
+  AttackScenario:
+    Description: "How attacker exploits this"
+    Value: |
+      1. Attacker scans for open port 3306 on AWS IP ranges
+      2. Attacker finds your RDS endpoint
+      3. Attacker attempts to connect using MySQL client
+      4. Attacker runs brute force on username/password
+      5. If successful → attacker dumps ALL database contents
+      6. Customer data, credentials, financial records stolen
+  RemediationCommand:
+    Description: "Fix: Remove public access and restrict security group"
+    Value: |
+      # Make database private
+      aws rds modify-db-instance --db-instance-identifier exposed-mysql-db --publicly-accessible --no-publicly-accessible
+      # Remove world-open security group rule
+      aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 3306 --cidr 0.0.0.0/0
+  ConnectionTestCommand:
+    Description: "Test if database is publicly accessible (run from any internet connection)"
+    Value: "mysql -h <DATABASE_ENDPOINT> -P 3306 -u admin -p"
