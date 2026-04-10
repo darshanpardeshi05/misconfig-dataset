@@ -1,0 +1,233 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - EFS file system with encryption at rest disabled
+
+Metadata:
+  Misconfiguration:
+    Category: "Lack of Encryption"
+    Severity: "HIGH"
+    RuleId: "EFS-002"
+    Description: "EFS file system has encryption at rest disabled. All data stored on this file system (application files, logs, databases, backups) is stored unencrypted."
+    Remediation: "Enable encryption at rest when creating EFS file systems. Note: Cannot be enabled on existing file systems without data migration."
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "Encrypted: false"
+      - "Encrypted: true"
+      - "EFS encryption"
+      - "FileSystem"
+      - "KmsKeyId"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: EFS file system with encryption at rest disabled
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: "EFS-Encryption-VPC"
+
+  # MISCONFIGURATION 1: EFS with encryption disabled
+  UnencryptedEFS:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+      # MISCONFIGURATION: Encrypted property is false (or omitted, which defaults to false)
+      Encrypted: false
+      LifecyclePolicies:
+        - TransitionToIA: AFTER_30_DAYS
+      Tags:
+        - Key: Name
+          Value: "unencrypted-efs"
+        - Key: Misconfiguration
+          Value: "EFS-Encryption-Disabled"
+        - Key: Severity
+          Value: "HIGH"
+
+  # Mount target in public subnet (adds network exposure)
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      MapPublicIpOnLaunch: true
+
+  # Security group allowing NFS access (port 2049)
+  EFSMountSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "EFS mount security group"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Name
+          Value: "EFS-SG"
+
+  # Mount target in public subnet (misconfiguration compound)
+  EFSMountTarget:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref UnencryptedEFS
+      SubnetId: !Ref PublicSubnet
+      SecurityGroups:
+        - !Ref EFSMountSecurityGroup
+
+  # MISCONFIGURATION 2: EFS with explicitly disabled encryption
+  ExplicitlyUnencryptedEFS:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      PerformanceMode: maxIO
+      ThroughputMode: elastic
+      # MISCONFIGURATION: Explicitly setting Encrypted: false
+      Encrypted: false
+      Tags:
+        - Key: Name
+          Value: "explicitly-unencrypted-efs"
+        - Key: Misconfiguration
+          Value: "EFS-Encryption-Disabled-Explicit"
+
+  # EC2 instance to mount and use unencrypted EFS
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref EFSMountSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum install -y amazon-efs-utils
+          mkdir -p /mnt/efs
+          # Mount unencrypted EFS - data will be stored without encryption
+          mount -t efs ${UnencryptedEFS}:/ /mnt/efs
+          
+          # Write sensitive test data (stored UNENCRYPTED)
+          echo "customer_ssn: 123-45-6789" > /mnt/efs/sensitive.txt
+          echo "credit_card: 4111-1111-1111-1111" >> /mnt/efs/sensitive.txt
+          echo "database_password: Admin123!" >> /mnt/efs/sensitive.txt
+          echo "api_key: sk_live_abc123xyz789" >> /mnt/efs/sensitive.txt
+          
+          chmod 600 /mnt/efs/sensitive.txt
+          echo "Sensitive data written to unencrypted EFS"
+      Tags:
+        - Key: Name
+          Value: "EFS-Client-Instance"
+        - Key: Misconfiguration
+          Value: "Writing-to-Unencrypted-EFS"
+
+  # Example of CORRECT configuration with encryption (commented)
+  # EncryptedEFS:
+  #   Type: AWS::EFS::FileSystem
+  #   Properties:
+  #     Encrypted: true
+  #     KmsKeyId: "alias/aws/efs"  # AWS managed key
+  #     # OR use customer managed KMS key
+  #     # KmsKeyId: !GetAtt CustomerKMSKey.Arn
+
+# Mapping for AMI IDs per region
+Mappings:
+  AWSRegionArch2AMI:
+    us-east-1:
+      AMI: ami-0c02fb55956c7d316
+    us-west-2:
+      AMI: ami-0d70546e43a328d54
+    eu-west-1:
+      AMI: ami-07470b0ad10cbe60e
+
+Outputs:
+  FileSystemId:
+    Description: "EFS file system with encryption disabled"
+    Value: !Ref UnencryptedEFS
+  EncryptedStatus:
+    Description: "Encryption status (false = misconfiguration)"
+    Value: "false"
+  ExplicitlyUnencryptedId:
+    Description: "EFS with explicitly disabled encryption"
+    Value: !Ref ExplicitlyUnencryptedEFS
+  RiskDescription:
+    Description: "Why this is dangerous"
+    Value: |
+      EFS data is stored UNENCRYPTED at rest:
+      - Application files and binaries
+      - Log files (may contain secrets, credentials, PII)
+      - Database files (if running database on EFS)
+      - Backups and snapshots
+      - Temporary files and caches
+      - Shared configuration files (may contain secrets)
+      
+      Data stored includes:
+      - Customer PII (names, addresses, SSNs)
+      - Financial data (credit cards, transactions)
+      - Authentication credentials (passwords, API keys)
+      - Business critical documents
+      
+      With unencrypted EFS, anyone with access to the underlying storage can read ALL data.
+  AttackScenario:
+    Description: "How data can be exposed"
+    Value: |
+      Scenario 1 - Snapshot Access:
+      1. Attacker gains access to AWS account (compromised keys)
+      2. Attacker creates snapshot of unencrypted EFS
+      3. Attacker creates new EFS from snapshot
+      4. Attacker mounts the EFS and reads ALL data in PLAINTEXT
+      
+      Scenario 2 - Storage Access:
+      1. Attacker gains physical access to AWS storage hardware
+      2. EFS data is stored unencrypted on disk
+      3. Attacker reads all file contents directly
+      
+      Scenario 3 - Mount Point Exposure:
+      1. Security group is open to 0.0.0.0/0 (as in this template)
+      2. Attacker mounts EFS from any EC2 instance
+      3. Attacker reads all files without permission
+  ImportantNote:
+    Description: "CRITICAL: Encryption cannot be enabled on existing EFS"
+    Value: |
+      Once an EFS file system is created without encryption, you CANNOT enable encryption on it.
+      
+      The ONLY way to encrypt the data is:
+      1. Create a new encrypted EFS file system
+      2. Copy all data from old to new EFS
+      3. Update all application mount points
+      4. Delete old unencrypted EFS
+      
+      This requires application downtime and data migration effort.
+  RemediationCommand:
+    Description: "Fix: Create new encrypted EFS and migrate data"
+    Value: |
+      # Step 1: Create new encrypted EFS
+      aws efs create-file-system \
+        --performance-mode generalPurpose \
+        --encrypted \
+        --kms-key-id alias/aws/efs
+      
+      # Step 2: Create mount targets in same subnets
+      aws efs create-mount-target \
+        --file-system-id <NEW_FS_ID> \
+        --subnet-id <SUBNET_ID> \
+        --security-groups <SG_ID>
+      
+      # Step 3: Copy data from old EFS to new EFS
+      # Use rsync or AWS DataSync
+      aws datasync create-task \
+        --source-location-arn <OLD_EFS_ARN> \
+        --destination-location-arn <NEW_EFS_ARN>
+      
+      # Step 4: Update application mount points to new EFS
+      # Step 5: Delete old unencrypted EFS
+      aws efs delete-file-system --file-system-id <OLD_FS_ID>
+  ComplianceViolation:
+    Description: "Compliance frameworks requiring EFS encryption"
+    Value: "PCI DSS (Requirement 3.4), HIPAA (164.312(a)(2)(iv)), GDPR (Article 32), SOC 2 (CC6.1), FedRAMP"
