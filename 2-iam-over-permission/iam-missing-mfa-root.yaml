@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - Root account without MFA (Multi-Factor Authentication) enabled
+
+Metadata:
+  Misconfiguration:
+    Category: "IAM & Access Over-Permission"
+    Severity: "CRITICAL"
+    RuleId: "IAM-007"
+    Description: "AWS Root account does not have MFA enabled. Root account has unrestricted access to all resources and cannot be restricted by any policy."
+    Remediation: "Enable MFA on root account immediately. Go to IAM → Account Settings → Manage MFA → Assign Virtual MFA device"
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "Root MFA"
+      - "RootAccountMFAEnabled"
+      - "Root without MFA"
+      - "VirtualMFADevice"
+      - "MFADevice"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+# IMPORTANT NOTE:
+# CloudFormation CANNOT directly manage root account MFA settings.
+# This template serves as DOCUMENTATION and DETECTION reference.
+#
+# The misconfiguration is detected by security scanners (Prowler, Scout Suite)
+# by checking the actual root account MFA status in the AWS account.
+#
+# This YAML file represents the documentation of this misconfiguration type.
+
+Resources:
+  # This is a documentation resource only
+  RootMFADocumentation:
+    Type: AWS::CloudFormation::WaitConditionHandle
+    Metadata:
+      MisconfigurationDocumentation: |
+        
+        ============================================================
+        MISCONFIGURATION: Root Account Without MFA
+        ============================================================
+        
+        WHAT IS THE ROOT ACCOUNT?
+        - The email address used to create the AWS account
+        - Has COMPLETE, UNRESTRICTED access to EVERYTHING
+        - Cannot be restricted by any IAM policy
+        - Can delete the entire AWS account
+        
+        WHY THIS IS CRITICAL:
+        - If root account password is stolen, attacker has FULL CONTROL
+        - No IAM policy can block root account actions
+        - Can delete CloudTrail logs (no evidence)
+        - Can close the account
+        - Can change all passwords
+        - Can delete all data
+        
+        HOW TO ENABLE MFA:
+        1. Sign in as root user
+        2. Go to IAM Dashboard
+        3. Click "Add MFA" under Account Settings
+        4. Choose "Virtual MFA device"
+        5. Use Google Authenticator, Authy, or any TOTP app
+        6. Scan QR code and enter two consecutive codes
+        7. Click "Assign MFA"
+        
+        HOW TO DETECT:
+        - Prowler check: check_iam_root_mfa_enabled
+        - Scout Suite: IAM section → Account Security → Root MFA
+        - CloudSploit: IAM → Root MFA Enabled
+        
+        HOW TO REMEDIATE:
+        - Enable MFA immediately (manual step via AWS Console)
+        - Or use AWS CLI: 
+          aws iam create-virtual-mfa-device --virtual-mfa-device-name RootMFA
+          (Then follow prompts to assign to root user)
+        
+        ============================================================
+        THIS IS ONE OF THE MOST CRITICAL AWS MISCONFIGURATIONS
+        ============================================================
+
+Outputs:
+  MisconfigurationDescription:
+    Description: "Root account MFA status (DETECTED by scanners, NOT set in CloudFormation)"
+    Value: "CRITICAL: Root account without MFA - This cannot be configured in CloudFormation"
+  DetectionTools:
+    Description: "Tools that detect this misconfiguration"
+    Value: "Prowler, Scout Suite, CloudSploit, AWS Config (with custom rule)"
+  ManualRemediationCommand:
+    Description: "Command to check root MFA status (via AWS CLI - requires root credentials)"
+    Value: "aws iam get-account-summary | grep AccountMFAEnabled"
+  EnableMFAInstructions:
+    Description: "Step-by-step remediation"
+    Value: "1. Sign in as root → 2. IAM Dashboard → 3. Add MFA → 4. Virtual MFA device → 5. Scan QR code → 6. Enter codes → 7. Assign"
