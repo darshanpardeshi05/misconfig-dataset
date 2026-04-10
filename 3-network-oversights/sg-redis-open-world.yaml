@@ -1,0 +1,196 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - Security group allows Redis (port 6379) from 0.0.0.0/0 (anyone on internet)
+
+Metadata:
+  Misconfiguration:
+    Category: "Network Oversights"
+    Severity: "CRITICAL"
+    RuleId: "SG-005"
+    Description: "Security group allows Redis access from entire internet (0.0.0.0/0). Redis has no authentication by default - this is extremely dangerous."
+    Remediation: "Restrict Redis access to specific application servers only. Enable Redis AUTH password if absolutely necessary."
+    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Keywords:
+      - "port 6379"
+      - "0.0.0.0/0"
+      - "CidrIp: 0.0.0.0/0"
+      - "FromPort: 6379"
+      - "ToPort: 6379"
+      - "Redis"
+      - "ElastiCache"
+    # LABEL FOR ML-BASED DETECTION
+    ML_Label: "misconfiguration"
+
+Resources:
+  # MISCONFIGURATION START: Security group with Redis open to entire internet
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: "Network-Misconfig-VPC"
+
+  # MISCONFIGURATION: Security group allowing Redis from anywhere
+  RedisOpenSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "MISCONFIGURATION - Redis open to world"
+      VpcId: !Ref VPC
+      # MISCONFIGURATION START: Redis port 6379 open to 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          CidrIp: "0.0.0.0/0"      # MISCONFIGURATION: Anyone can access Redis
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          CidrIpv6: "::/0"         # MISCONFIGURATION: IPv6 also open
+      # MISCONFIGURATION END
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Misconfiguration
+          Value: "SG-Redis-Open-World"
+
+  # ElastiCache Redis cluster exposed to internet (MISCONFIGURATION)
+  # Note: ElastiCache cannot be directly made public, but security group allows access from internet
+  ExposedRedisCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      ClusterId: "exposed-redis-cluster"
+      Engine: redis
+      CacheNodeType: cache.t3.micro
+      NumCacheNodes: 1
+      CacheSubnetGroupName: !Ref PublicCacheSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref RedisOpenSecurityGroup
+      Tags:
+        - Key: Misconfiguration
+          Value: "Redis-Publicly-Accessible"
+
+  # Public subnet group for ElastiCache
+  PublicCacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: "Public subnet group - MISCONFIGURATION"
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      MapPublicIpOnLaunch: true
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}b"
+      MapPublicIpOnLaunch: true
+
+  # Internet Gateway for public access
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref RouteTable
+
+  SubnetRouteAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref RouteTable
+
+  # EC2 instance with Redis client (to demonstrate access)
+  RedisClientInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref RedisOpenSecurityGroup
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          amazon-linux-extras install redis6 -y
+          echo "Redis client installed. Connect using: redis-cli -h <REDIS_ENDPOINT> -p 6379"
+      Tags:
+        - Key: Name
+          Value: "Redis-Client-Instance"
+
+# Mapping for AMI IDs per region
+Mappings:
+  AWSRegionArch2AMI:
+    us-east-1:
+      AMI: ami-0c02fb55956c7d316
+    us-west-2:
+      AMI: ami-0d70546e43a328d54
+    eu-west-1:
+      AMI: ami-07470b0ad10cbe60e
+
+Outputs:
+  SecurityGroupId:
+    Description: "Security group ID with Redis open to world"
+    Value: !Ref RedisOpenSecurityGroup
+  RedisEndpoint:
+    Description: "Redis cluster endpoint"
+    Value: !GetAtt ExposedRedisCluster.RedisEndpoint.Address
+  RedisPort:
+    Description: "Redis port (6379)"
+    Value: !GetAtt ExposedRedisCluster.RedisEndpoint.Port
+  RiskDescription:
+    Description: "Why this is CRITICAL"
+    Value: "Redis has NO AUTHENTICATION by default. Anyone who can reach port 6379 can read, write, and delete all Redis data without a password."
+  AttackScenario:
+    Description: "How attacker exploits this"
+    Value: |
+      1. Attacker scans for open port 6379 on AWS IP ranges
+      2. Attacker finds your Redis endpoint
+      3. Attacker connects: redis-cli -h your-redis.aws.com -p 6379
+      4. NO PASSWORD REQUIRED (Redis default has no auth)
+      5. Attacker runs: FLUSHALL (deletes all data)
+      6. Attacker runs: CONFIG SET dir /tmp (writes files to server)
+      7. Attacker can steal data, inject SSH keys, or use for crypto mining
+  RemediationCommand:
+    Description: "Fix: Restrict security group and enable AUTH"
+    Value: |
+      # Remove world-open security group rule
+      aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 6379 --cidr 0.0.0.0/0
+      # For Redis Cluster with AUTH (create new with password)
+      # Set Redis AUTH password in parameter group
+  ConnectionTestCommand:
+    Description: "Test if Redis is publicly accessible (no password needed)"
+    Value: "redis-cli -h <REDIS_ENDPOINT> -p 6379 PING"
