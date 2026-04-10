@@ -1,0 +1,51 @@
+filename,category,severity,keywords,label
+s3-public-read-acl.yaml,Storage Exposure,CRITICAL,"PublicRead, AccessControl: PublicRead, BlockPublicAcls: false",misconfiguration
+s3-public-read-write-acl.yaml,Storage Exposure,CRITICAL,"PublicReadWrite, AccessControl: PublicReadWrite, BlockPublicAcls: false",misconfiguration
+s3-block-public-access-disabled.yaml,Storage Exposure,HIGH,"BlockPublicAcls: false, BlockPublicPolicy: false, IgnorePublicAcls: false, RestrictPublicBuckets: false",misconfiguration
+ebs-snapshot-public.yaml,Storage Exposure,CRITICAL,"createVolumePermission, group-names all, modify-snapshot-attribute",misconfiguration
+rds-snapshot-public.yaml,Storage Exposure,CRITICAL,"modify-db-snapshot-attribute, values-to-add all, restore",misconfiguration
+ecr-repository-public.yaml,Storage Exposure,HIGH,"Principal: '*, ecr:GetDownloadUrlForLayer, ecr:BatchGetImage, public pull",misconfiguration
+ami-public.yaml,Storage Exposure,CRITICAL,"modify-image-attribute, launch-permission, Group=all, Add=[{Group=all}]",misconfiguration
+efs-public-mount.yaml,Storage Exposure,HIGH,"port 2049, 0.0.0.0/0, MountTarget, PublicSubnet",misconfiguration
+s3-bucket-policy-public.yaml,Storage Exposure,CRITICAL,"Principal: '*, Effect: Allow, s3:GetObject, BlockPublicPolicy: false",misconfiguration
+s3-object-public-acl.yaml,Storage Exposure,HIGH,"public-read, put-object-acl, ACL: 'public-read'",misconfiguration
+iam-wildcard-action.yaml,IAM Over-Permission,HIGH,"Action: '*, Effect: Allow, Resource: '*, Action: [*]",misconfiguration
+iam-wildcard-resource.yaml,IAM Over-Permission,HIGH,"Resource: '*, Effect: Allow, Resource: [*]",misconfiguration
+iam-wildcard-both.yaml,IAM Over-Permission,CRITICAL,"Action: '*, Resource: '*, AdministratorAccess, Effect: Allow",misconfiguration
+iam-admin-role.yaml,IAM Over-Permission,CRITICAL,"AdministratorAccess, arn:aws:iam::aws:policy/AdministratorAccess, ManagedPolicyArns",misconfiguration
+iam-s3-full-access.yaml,IAM Over-Permission,HIGH,"s3:*, Action: s3:*, arn:aws:s3:::*",misconfiguration
+iam-ec2-full-access.yaml,IAM Over-Permission,HIGH,"ec2:*, Action: ec2:*, ec2:RunInstances, ec2:TerminateInstances",misconfiguration
+iam-missing-mfa-root.yaml,IAM Over-Permission,CRITICAL,"Root MFA, RootAccountMFAEnabled, VirtualMFADevice, MFADevice",misconfiguration
+iam-missing-mfa-user.yaml,IAM Over-Permission,HIGH,"MFADevice, VirtualMFADevice, EnableMFADevice, User without MFA",misconfiguration
+iam-inactive-user.yaml,IAM Over-Permission,MEDIUM,"Inactive user, Orphaned account, LastUsed, User not deleted",misconfiguration
+iam-old-access-key.yaml,IAM Over-Permission,MEDIUM,"AccessKey, CreateDate, Key rotation, Old access key, > 90 days",misconfiguration
+iam-trust-policy-principal-star.yaml,IAM Over-Permission,CRITICAL,"Principal: '*, sts:AssumeRole, Trust policy, AssumeRolePolicyDocument",misconfiguration
+lambda-execution-role-overly-permissive.yaml,IAM Over-Permission,CRITICAL,"AdministratorAccess, lambda.amazonaws.com, Action: '*, Resource: '*",misconfiguration
+sg-ssh-open-world.yaml,Network Oversights,HIGH,"port 22, 0.0.0.0/0, CidrIp: 0.0.0.0/0, FromPort: 22",misconfiguration
+sg-rdp-open-world.yaml,Network Oversights,HIGH,"port 3389, 0.0.0.0/0, CidrIp: 0.0.0.0/0, FromPort: 3389",misconfiguration
+sg-mysql-open-world.yaml,Network Oversights,CRITICAL,"port 3306, 0.0.0.0/0, CidrIp: 0.0.0.0/0, PubliclyAccessible: true",misconfiguration
+sg-postgres-open-world.yaml,Network Oversights,CRITICAL,"port 5432, 0.0.0.0/0, CidrIp: 0.0.0.0/0, PubliclyAccessible: true",misconfiguration
+sg-redis-open-world.yaml,Network Oversights,CRITICAL,"port 6379, 0.0.0.0/0, CidrIp: 0.0.0.0/0, Redis",misconfiguration
+sg-mongodb-open-world.yaml,Network Oversights,CRITICAL,"port 27017, 0.0.0.0/0, CidrIp: 0.0.0.0/0, MongoDB",misconfiguration
+sg-all-ports-open.yaml,Network Oversights,CRITICAL,"-1, 0.0.0.0/0, CidrIp: 0.0.0.0/0, all ports",misconfiguration
+vpc-flow-logs-disabled.yaml,Network Oversights,MEDIUM,"FlowLog, VPCFlowLogs, FlowLogsDisabled, No Flow Logs",misconfiguration
+rds-publicly-accessible.yaml,Network Oversights,CRITICAL,"PubliclyAccessible: true, RDS public, database public, 0.0.0.0/0",misconfiguration
+default-vpc-in-use.yaml,Network Oversights,MEDIUM,"Default VPC, isDefault, default-vpc, MapPublicIpOnLaunch: true",misconfiguration
+s3-encryption-disabled.yaml,Lack of Encryption,MEDIUM,"BucketEncryption, SSE-S3, encryption disabled, no encryption",misconfiguration
+s3-sse-not-enforced.yaml,Lack of Encryption,MEDIUM,"PutObject, x-amz-server-side-encryption, s3:x-amz-server-side-encryption",misconfiguration
+ebs-encryption-disabled.yaml,Lack of Encryption,HIGH,"Encrypted: false, EBS encryption, Volume encryption",misconfiguration
+rds-encryption-disabled.yaml,Lack of Encryption,HIGH,"StorageEncrypted: false, RDS encryption, database encryption",misconfiguration
+dynamodb-encryption-disabled.yaml,Lack of Encryption,MEDIUM,"SSESpecification, KMSMasterKeyId, AWS owned key, default encryption",misconfiguration
+lambda-env-not-encrypted.yaml,Lack of Encryption,HIGH,"KmsKeyArn, Environment, Variables, kms:Encrypt",misconfiguration
+sqs-encryption-disabled.yaml,Lack of Encryption,MEDIUM,"KmsMasterKeyId, SqsManagedSseEnabled, SSE, encryption",misconfiguration
+sns-encryption-disabled.yaml,Lack of Encryption,MEDIUM,"KmsMasterKeyId, TopicEncryption, sns:Encrypt",misconfiguration
+efs-encryption-disabled.yaml,Lack of Encryption,HIGH,"Encrypted: false, EFS encryption, KmsKeyId",misconfiguration
+redshift-encryption-disabled.yaml,Lack of Encryption,HIGH,"Encrypted: false, Redshift encryption, KmsKeyId",misconfiguration
+ec2-auto-assign-public-ip.yaml,Insecure Defaults,MEDIUM,"MapPublicIpOnLaunch: true, AssociatePublicIpAddress: true, PublicIp",misconfiguration
+default-security-group-in-use.yaml,Insecure Defaults,HIGH,"default security group, GroupId, SecurityGroupIngress, 0.0.0.0/0",misconfiguration
+ec2-default-credential-report-not-enabled.yaml,Insecure Defaults,LOW,"credential report, get-credential-report, generate-credential-report",misconfiguration
+cloudtrail-disabled.yaml,Insecure Defaults,HIGH,"CloudTrail, Trail, IsMultiRegionTrail, EnableLogFileValidation",misconfiguration
+config-recorder-disabled.yaml,Insecure Defaults,HIGH,"ConfigurationRecorder, RecordingGroup, DeliveryChannel",misconfiguration
+guardduty-disabled.yaml,Insecure Defaults,HIGH,"GuardDuty, Detector, FindingPublishingFrequency, EnableGuardDuty",misconfiguration
+s3-logging-disabled.yaml,Insecure Defaults,MEDIUM,"LoggingConfiguration, TargetBucket, TargetPrefix, Server access logging",misconfiguration
+iam-user-without-password-policy.yaml,Insecure Defaults,MEDIUM,"PasswordPolicy, MinimumPasswordLength, RequireUppercaseCharacters, MaxPasswordAge",misconfiguration
