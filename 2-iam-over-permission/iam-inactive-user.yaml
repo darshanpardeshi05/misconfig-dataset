@@ -1,57 +1,67 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: MISCONFIGURATION - Inactive IAM user not deleted (credentials still exist but user no longer works)
+Description: MISCONFIGURATION - Inactive IAM user not deleted (credentials still active)
 
 Metadata:
   Misconfiguration:
+    Id: "MISCONFIG-019"
+    Batch: "Batch-4"
     Category: "IAM & Access Over-Permission"
     Severity: "MEDIUM"
     RuleId: "IAM-009"
-    Description: "IAM user is inactive (employee left, role changed) but user account and credentials still exist. This creates orphaned accounts that can be exploited."
-    Remediation: "Delete inactive IAM users immediately. If you need to retain for audit, disable access keys and login profile first."
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Service: "IAM"
+    ResourceType: "AWS::IAM::User"
+    Description: "IAM user is inactive but still has active credentials"
+    Impact: "Orphaned account can be abused without detection"
+    Remediation: "Delete inactive IAM users or disable credentials"
+
     Keywords:
       - "Inactive user"
+      - "AccessKey Active"
       - "Orphaned account"
-      - "AccessKey"
       - "LoginProfile"
-      - "User not deleted"
-      - "LastUsed"
-      - "Inactive"
-    # LABEL FOR ML-BASED DETECTION
+      - "Unused credentials"
+
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION START: Inactive IAM user with active credentials
-  # Scenario: Employee left the company 6 months ago, but account still exists
-  
+
   InactiveUser:
     Type: AWS::IAM::User
     Properties:
-      UserName: "inactive-former-employee"
-      # User still has login profile enabled (can access console)
+      UserName: !Sub "inactive-user-${AWS::StackName}"
       LoginProfile:
         Password: "OldPassword123!"
         PasswordResetRequired: false
       Tags:
+        - Key: Name
+          Value: "Inactive-User"
         - Key: Misconfiguration
           Value: "IAM-Inactive-User"
+        - Key: MisconfigId
+          Value: "MISCONFIG-019"
+        - Key: Batch
+          Value: "Batch-4"
+        - Key: Category
+          Value: "IAM-OverPermission"
+        - Key: Severity
+          Value: "MEDIUM"
         - Key: Status
           Value: "Inactive"
-        - Key: LastActiveDate
-          Value: "2023-01-15"  # No activity since this date
+        - Key: LastActive
+          Value: "2023-01-01"
+        - Key: ToolDetection
+          Value: "Prowler,ScoutSuite,Custodian"
 
-  # MISCONFIGURATION: Access keys still active for inactive user
   InactiveUserAccessKey:
     Type: AWS::IAM::AccessKey
     Properties:
       UserName: !Ref InactiveUser
-      Status: Active  # MISCONFIGURATION: Should be Inactive or deleted
+      Status: Active   # MISCONFIGURATION
 
-  # MISCONFIGURATION: User still has permissions (should have been revoked)
   InactiveUserPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: "FormerEmployeePolicy"
+      PolicyName: !Sub "InactiveUserPolicy-${AWS::StackName}"
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -63,72 +73,23 @@ Resources:
       Users:
         - !Ref InactiveUser
 
-  # SECOND MISCONFIGURATION: Another inactive user with admin access (worse)
-  InactiveAdminUser:
-    Type: AWS::IAM::User
-    Properties:
-      UserName: "inactive-admin-former-employee"
-      LoginProfile:
-        Password: "AdminPassword123!"
-      Tags:
-        - Key: Misconfiguration
-          Value: "IAM-Inactive-Admin-User"
-
-  InactiveAdminKey:
-    Type: AWS::IAM::AccessKey
-    Properties:
-      UserName: !Ref InactiveAdminUser
-      Status: Active
-
-  InactiveAdminPolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyName: "FormerAdminPolicy"
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Action: "*"
-            Resource: "*"
-      Users:
-        - !Ref InactiveAdminUser
-
-  # THIRD MISCONFIGURATION: Service account that is no longer used
-  InactiveServiceAccount:
-    Type: AWS::IAM::User
-    Properties:
-      UserName: "inactive-service-account"
-      Tags:
-        - Key: Purpose
-          Value: "Legacy CI/CD"  # This pipeline no longer exists
-        - Key: LastUsed
-          Value: "2022-08-01"
-
-  InactiveServiceKey:
-    Type: AWS::IAM::AccessKey
-    Properties:
-      UserName: !Ref InactiveServiceAccount
-      Status: Active
-
 Outputs:
-  InactiveUserName:
-    Description: "Inactive user with active credentials"
+  Username:
+    Description: "Inactive IAM user"
     Value: !Ref InactiveUser
-  InactiveAdminName:
-    Description: "Inactive admin user (CRITICAL risk)"
-    Value: !Ref InactiveAdminUser
-  InactiveServiceName:
-    Description: "Inactive service account"
-    Value: !Ref InactiveServiceAccount
-  RiskDescription:
-    Description: "Why this is dangerous"
-    Value: "Former employee or unused service account with active credentials can be exploited without anyone noticing"
-  AttackScenario:
-    Description: "What an attacker could do"
-    Value: "1. Find inactive username via reconnaissance | 2. Guess or crack password | 3. Access AWS resources using legitimate credentials | 4. No alerts because activity looks normal"
-  RemediationCommand:
-    Description: "Fix: Delete inactive users"
-    Value: !Sub "aws iam delete-login-profile --user-name ${InactiveUser} && aws iam delete-access-key --user-name ${InactiveUser} --access-key-id ${InactiveUserAccessKey} && aws iam delete-user --user-name ${InactiveUser}"
-  DisableAccessKeyCommand:
-    Description: "Alternative: Disable access keys instead of deleting user"
-    Value: !Sub "aws iam update-access-key --user-name ${InactiveUser} --access-key-id ${InactiveUserAccessKey} --status Inactive"
+
+  MisconfigId:
+    Description: "Unique Misconfiguration ID"
+    Value: "MISCONFIG-019"
+
+  Risk:
+    Description: "Security Risk"
+    Value: "Inactive user still has active credentials"
+
+  CheckCommand:
+    Description: "Check last usage"
+    Value: !Sub "aws iam get-user --user-name ${InactiveUser}"
+
+  Remediation:
+    Description: "Delete or disable user"
+    Value: !Sub "aws iam update-access-key --user-name ${InactiveUser} --access-key-id <KEY_ID> --status Inactive"
