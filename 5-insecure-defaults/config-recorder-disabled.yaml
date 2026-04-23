@@ -8,177 +8,35 @@ Metadata:
     RuleId: "CONFIG-001"
     Description: "AWS Config recorder is disabled. No configuration history, change tracking, or compliance monitoring for AWS resources."
     Remediation: "Enable AWS Config recorder in all regions with appropriate rules and S3 bucket delivery"
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
     Keywords:
       - "ConfigurationRecorder"
       - "RecordingGroup"
       - "ConfigRecorder"
       - "DeliveryChannel"
-    # LABEL FOR ML-BASED DETECTION
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION: AWS Config recorder is DISABLED (no recorder resources defined)
-  
-  # This template documents the ABSENCE of AWS Config configuration
-  # In a secure environment, you would have:
-  # 1. ConfigurationRecorder (records resource changes)
-  # 2. DeliveryChannel (delivers to S3)
-  # 3. S3 bucket for config snapshots
-  # 4. Config rules for compliance monitoring
-  
-  DocumentationOnly:
+  # This template documents the ABSENCE of AWS Config recorder.
+  # No ConfigurationRecorder or DeliveryChannel is defined.
+  DocumentationPlaceholder:
     Type: AWS::CloudFormation::WaitConditionHandle
     Metadata:
-      ConfigRecorderMisconfiguration: |
-        
-        ============================================================
-        MISCONFIGURATION: AWS Config Recorder DISABLED
-        ============================================================
-        
-        WHAT IS AWS CONFIG:
-        - Records configuration changes to AWS resources
-        - Tracks relationships between resources
-        - Evaluates resources against compliance rules
-        - Provides configuration history timeline
-        
-        WHY THIS IS CRITICAL:
-        - NO visibility into resource configuration changes
-        - Cannot track who changed what and when
-        - No compliance monitoring (CIS, PCI, HIPAA)
-        - Cannot detect resource drift
-        - No configuration history for incident investigation
-        - Compliance audits FAIL without Config
-        
-        WHAT YOU ARE MISSING:
-        - Configuration timeline for EC2, S3, RDS, etc.
-        - Resource change history (before/after)
-        - Relationship mapping between resources
-        - Compliance evaluation results
-        - Configuration snapshots
-        - Change notifications via SNS
-        
-        ============================================================
-        DETECTION AND REMEDIATION
-        ============================================================
-        
-        DETECTION COMMAND:
-        aws configservice describe-configuration-recorders
-        
-        TO CHECK RECORDER STATUS:
-        aws configservice describe-configuration-recorder-status
-        
-        REMEDIATION:
-        1. Create S3 bucket for Config snapshots
-        2. Create IAM role for Config service
-        3. Create ConfigurationRecorder
-        4. Create DeliveryChannel
-        5. Enable recording for all resource types
-        6. Add compliance rules (managed or custom)
-
-  # Example of what SHOULD be configured (commented - this is MISSING)
-  
-  # MissingS3Bucket:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: !Sub "aws-config-bucket-${AWS::AccountId}"
-  #     VersioningConfiguration:
-  #       Status: Enabled
-  #
-  # MissingConfigRole:
-  #   Type: AWS::IAM::Role
-  #   Properties:
-  #     AssumeRolePolicyDocument:
-  #       Statement:
-  #         - Effect: Allow
-  #           Principal:
-  #             Service: config.amazonaws.com
-  #           Action: sts:AssumeRole
-  #     Policies:
-  #       - PolicyName: ConfigPolicy
-  #         PolicyDocument:
-  #           Statement:
-  #             - Effect: Allow
-  #               Action:
-  #                 - s3:PutObject
-  #               Resource: !Sub "${MissingS3Bucket.Arn}/AWSLogs/*"
-  #
-  # MissingConfigRecorder:
-  #   Type: AWS::Config::ConfigurationRecorder
-  #   Properties:
-  #     Name: "aws-config-recorder"
-  #     RoleARN: !GetAtt MissingConfigRole.Arn
-  #     RecordingGroup:
-  #       AllSupported: true
-  #       IncludeGlobalResourceTypes: true
-  #
-  # MissingDeliveryChannel:
-  #   Type: AWS::Config::DeliveryChannel
-  #   Properties:
-  #     Name: "config-delivery-channel"
-  #     S3BucketName: !Ref MissingS3Bucket
+      Note: "No AWS Config recorder is defined – configuration tracking is disabled."
 
 Outputs:
-  RiskDescription:
-    Description: "Why disabled AWS Config is CRITICAL"
-    Value: |
-      With AWS Config Recorder DISABLED:
-      
-      - NO record of resource configuration changes
-      - Cannot track who changed what and when
-      - No compliance monitoring (CIS, PCI, HIPAA)
-      - Cannot detect configuration drift
-      - No configuration history for incident response
-      - Compliance audits FAIL
-      
-      Real impact:
-      - Security group opened → No record of change
-      - S3 bucket made public → No history to revert
-      - IAM policy modified → Cannot see before/after
-      - Compliance audit → Automatic FAIL
-  WhatYouCannotSee:
-    Description: "Configuration changes NOT being tracked"
-    Value: |
-      - EC2: Instance type changes, security group changes, AMI updates
-      - S3: Bucket policy changes, public access block changes
-      - IAM: Role attachments, policy modifications, user changes
-      - RDS: Instance class changes, security group changes
-      - VPC: Subnet creation, route table changes, security group rules
-      - All resources: Creation, modification, deletion history
-  AttackScenario:
-    Description: "How attacker exploits disabled Config"
-    Value: |
-      1. Attacker compromises IAM credentials
-      2. Attacker opens security group to 0.0.0.0/0
-      3. NO Config recorder → change NOT logged
-      4. Attacker makes S3 bucket public
-      5. NO Config recorder → no record of change
-      6. Security team sees no alerts
-      7. Compliance audit fails months later
-      8. Cannot determine when or how breach occurred
+  Risk:
+    Description: "Security Risk"
+    Value: "Without Config recorder, resource changes are not logged, compliance rules are not evaluated, and security investigations lack historical context."
   RemediationCommand:
-    Description: "Fix: Enable AWS Config recorder"
+    Description: "Fix: Enable AWS Config recorder, create delivery channel to S3"
     Value: |
-      # Step 1: Create S3 bucket for Config
+      # Create S3 bucket for Config
       aws s3api create-bucket --bucket aws-config-bucket-<ACCOUNT_ID> --create-bucket-configuration LocationConstraint=<REGION>
-      
-      # Step 2: Create IAM role for Config
-      aws iam create-role --role-name AWSConfigRole --assume-role-policy-document file://config-trust-policy.json
-      
-      # Step 3: Create configuration recorder
-      aws configservice put-configuration-recorder \
-        --configuration-recorder name=default,roleARN=arn:aws:iam::<ACCOUNT_ID>:role/AWSConfigRole \
-        --recording-group allSupported=true,includeGlobalResourceTypes=true
-      
-      # Step 4: Create delivery channel
-      aws configservice put-delivery-channel \
-        --delivery-channel name=default,s3BucketName=aws-config-bucket-<ACCOUNT_ID>
-      
-      # Step 5: Start recorder
+      # Create IAM role for Config (trust policy allowing config.amazonaws.com)
+      aws iam create-role --role-name AWSConfigRole --assume-role-policy-document file://trust-policy.json
+      # Create configuration recorder
+      aws configservice put-configuration-recorder --configuration-recorder name=default,roleARN=arn:aws:iam::<ACCOUNT_ID>:role/AWSConfigRole --recording-group allSupported=true,includeGlobalResourceTypes=true
+      # Create delivery channel
+      aws configservice put-delivery-channel --delivery-channel name=default,s3BucketName=aws-config-bucket-<ACCOUNT_ID>
+      # Start recorder
       aws configservice start-configuration-recorder --configuration-recorder-name default
-      
-      # Step 6: Verify recorder is active
-      aws configservice describe-configuration-recorder-status
-  ComplianceViolation:
-    Description: "Compliance frameworks requiring AWS Config"
-    Value: "CIS Benchmark (2.1 - enable Config), PCI DSS (Requirement 10 - log changes), HIPAA, SOC 2 (CC7.2 - monitoring), NIST 800-53 (CM-3 - configuration change control)"
