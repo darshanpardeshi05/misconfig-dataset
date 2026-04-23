@@ -1,32 +1,27 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: MISCONFIGURATION - Lambda execution role with overly permissive permissions
+Description: MISCONFIGURATION - Lambda execution role with overly permissive permissions (AdministratorAccess)
 
 Metadata:
   Misconfiguration:
     Category: "IAM & Access Over-Permission"
-    Severity: "HIGH"
+    Severity: "CRITICAL"
     RuleId: "IAM-012"
-    Description: "Lambda execution role has excessive permissions (AdministratorAccess or wildcards). Compromised Lambda function can be used to attack other AWS resources."
-    Remediation: "Apply least privilege principle. Grant only specific actions needed for Lambda function to operate."
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Description: "Lambda execution role has AdministratorAccess managed policy attached. Compromised Lambda function can be used to attack any AWS resource."
+    Remediation: "Replace AdministratorAccess with least privilege policy specific to Lambda's needs."
     Keywords:
       - "lambda.amazonaws.com"
-      - "AWSLambdaBasicExecutionRole"
       - "AdministratorAccess"
       - "Action: '*'"
       - "Resource: '*'"
       - "lambda execution role"
-    # LABEL FOR ML-BASED DETECTION
+      - "ManagedPolicyArns"
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION START: Lambda execution role with full admin access
-  
-  # MISCONFIGURATION 1: Lambda role with AdministratorAccess managed policy
   OverlyPermissiveLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: "lambda-overly-permissive-role"
+      RoleName: !Sub "lambda-overly-permissive-role-${AWS::StackName}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -34,132 +29,57 @@ Resources:
             Principal:
               Service: "lambda.amazonaws.com"
             Action: "sts:AssumeRole"
-      # MISCONFIGURATION: AdministratorAccess gives full admin rights
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/AdministratorAccess"
       Tags:
-        - Key: Misconfiguration
+        - Key: Name
           Value: "Lambda-Overly-Permissive-Role"
+        - Key: Misconfiguration
+          Value: "IAM-012"
+        - Key: Category
+          Value: "IAM-OverPermission"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-5"
 
-  # MISCONFIGURATION 2: Lambda function using the overly permissive role
   DangerousLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: "dangerous-lambda-function"
+      FunctionName: !Sub "dangerous-lambda-function-${AWS::StackName}"
       Handler: "index.handler"
       Runtime: "python3.9"
       Role: !GetAtt OverlyPermissiveLambdaRole.Arn
       Code:
         ZipFile: |
           def handler(event, context):
-              # This Lambda can do ANYTHING in your AWS account
-              # Because its role has AdministratorAccess
-              print("This Lambda has full admin access!")
-              return {"statusCode": 200, "body": "Dangerous function"}
+              print("This Lambda has full admin access due to overly permissive role.")
+              return {"statusCode": 200, "body": "Dangerous function executed"}
       Tags:
+        - Key: Name
+          Value: "Dangerous-Lambda-Function"
         - Key: Misconfiguration
-          Value: "Lambda-With-Admin-Role"
-
-  # MISCONFIGURATION 3: Lambda role with wildcard permissions (inline policy)
-  WildcardLambdaRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: "lambda-wildcard-role"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service: "lambda.amazonaws.com"
-            Action: "sts:AssumeRole"
-      Policies:
-        - PolicyName: "WildcardPolicy"
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: "Allow"
-                # MISCONFIGURATION: Action wildcard
-                Action: "*"
-                # MISCONFIGURATION: Resource wildcard
-                Resource: "*"
-      Tags:
-        - Key: Misconfiguration
-          Value: "Lambda-Wildcard-Role"
-
-  # MISCONFIGURATION 4: Lambda role with S3 full access (still dangerous)
-  LambdaS3FullAccessRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: "lambda-s3-full-access-role"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service: "lambda.amazonaws.com"
-            Action: "sts:AssumeRole"
-      Policies:
-        - PolicyName: "S3FullAccess"
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: "Allow"
-                Action: "s3:*"
-                Resource: "*"
-      Tags:
-        - Key: Misconfiguration
-          Value: "Lambda-S3-Full-Access"
-
-  # Lambda function with S3 full access
-  LambdaWithS3Access:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: "lambda-s3-access-function"
-      Handler: "index.handler"
-      Runtime: "python3.9"
-      Role: !GetAtt LambdaS3FullAccessRole.Arn
-      Code:
-        ZipFile: |
-          import boto3
-          def handler(event, context):
-              s3 = boto3.client('s3')
-              # This Lambda can read, write, delete ANY S3 bucket
-              buckets = s3.list_buckets()
-              print(f"Found {len(buckets['Buckets'])} buckets")
-              return {"statusCode": 200, "body": "S3 access successful"}
-      Tags:
-        - Key: Misconfiguration
-          Value: "Lambda-With-S3-Full-Access"
+          Value: "IAM-012"
+        - Key: Category
+          Value: "IAM-OverPermission"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-5"
 
 Outputs:
-  DangerousLambdaName:
-    Description: "Lambda function with admin role"
+  LambdaFunctionName:
+    Description: "Lambda function with overly permissive role"
     Value: !Ref DangerousLambdaFunction
-  OverlyPermissiveRoleName:
+  RoleName:
     Description: "Lambda execution role with AdministratorAccess"
     Value: !Ref OverlyPermissiveLambdaRole
-  WildcardRoleName:
-    Description: "Lambda role with wildcard permissions"
-    Value: !Ref WildcardLambdaRole
-  RiskDescription:
-    Description: "Why this is dangerous"
-    Value: |
-      If attacker compromises this Lambda function (via code injection, dependency confusion, or exposed secrets):
-      - Attacker inherits ALL permissions of the Lambda role
-      - With AdministratorAccess, attacker can: delete all resources, steal all data, disable security
-      - With S3 full access, attacker can: read, write, delete all S3 data
-  AttackScenario:
-    Description: "How attacker exploits overly permissive Lambda role"
-    Value: |
-      1. Attacker finds vulnerability in Lambda function code (e.g., RCE, SSRF)
-      2. Attacker executes arbitrary code inside Lambda
-      3. Attacker uses Lambda's credentials (from metadata service or environment)
-      4. Attacker calls AWS APIs with Lambda role permissions
-      5. If role has admin → full account compromise
-      6. Attacker maintains persistence by creating new resources
+  Risk:
+    Description: "Security Risk"
+    Value: "If this Lambda function is compromised, attacker gains full admin access to your AWS account."
   RemediationCommand:
-    Description: "Fix: Replace with least privilege policy"
-    Value: !Sub "aws iam put-role-policy --role-name ${OverlyPermissiveLambdaRole} --policy-name LeastPrivilegePolicy --policy-document '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\"],\"Resource\":\"arn:aws:s3:::specific-bucket/*\"}]}'"
-  BestPracticeNote:
-    Description: "Lambda should only have permissions needed for its specific task"
-    Value: "Example: If Lambda reads from S3 only, grant only s3:GetObject on specific bucket"
+    Description: "Fix: Replace AdministratorAccess with least privilege policy"
+    Value: !Sub "aws iam detach-role-policy --role-name ${OverlyPermissiveLambdaRole} --policy-arn arn:aws:iam::aws:policy/AdministratorAccess && aws iam put-role-policy --role-name ${OverlyPermissiveLambdaRole} --policy-name LeastPrivilege --policy-document '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"logs:CreateLogGroup\",\"logs:CreateLogStream\",\"logs:PutLogEvents\"],\"Resource\":\"*\"}]}'"
+  EmergencyFix:
+    Description: "Delete the Lambda function and role if compromised"
+    Value: !Sub "aws lambda delete-function --function-name ${DangerousLambdaFunction} && aws iam delete-role --role-name ${OverlyPermissiveLambdaRole}"
