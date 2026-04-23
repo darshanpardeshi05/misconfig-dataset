@@ -4,26 +4,63 @@ Description: MISCONFIGURATION - S3 bucket with PublicRead ACL
 # METADATA - For research tracking and automated detection
 Metadata:
   Misconfiguration:
-    Category: "Storage Exposure"
+    Category: "Storage-Exposure"
     Severity: "CRITICAL"
     RuleId: "S3-001"
     Description: "S3 bucket allows public read access via ACL"
     Remediation: "Set AccessControl to Private and enable BlockPublicAccess"
+    Keywords:
+      - "PublicRead"
+      - "S3 Public"
+      - "Public ACL"
+      - "BlockPublicAccess disabled"
+      - "S3 bucket public"
+    ML_Label: "misconfiguration"
 
 Resources:
   PublicBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "public-bucket-${AWS::AccountId}"
       
-      # MISCONFIGURATION START: PublicRead ACL allows anyone to read objects
+      # Unique bucket name to avoid global conflicts
+      BucketName: !Sub "s3-public-read-${AWS::AccountId}-${AWS::StackName}"
+      
+      # MISCONFIGURATION: Public read access enabled
       AccessControl: PublicRead
-      # MISCONFIGURATION END
-      
-      # MISCONFIGURATION START: Block Public Access is disabled
+
+      # MISCONFIGURATION: Block Public Access disabled
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: false      # Should be true
-        BlockPublicPolicy: false    # Should be true
-        IgnorePublicAcls: false     # Should be true
-        RestrictPublicBuckets: false # Should be true
-      # MISCONFIGURATION END
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+      # Tags used for filtering, classification, and mapping
+      Tags:
+        - Key: Name
+          Value: "S3-Public-Read-Bucket"
+        - Key: Misconfiguration
+          Value: "S3-001"
+        - Key: Category
+          Value: "Storage-Exposure"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-1"
+
+Outputs:
+  BucketName:
+    Description: "Name of the publicly accessible S3 bucket"
+    Value: !Ref PublicBucket
+
+  Risk:
+    Description: "Security Risk"
+    Value: "This bucket allows public read access. Anyone on the internet can read all objects."
+
+  FixCommand:
+    Description: "Remediation Command"
+    Value: |
+      aws s3api put-public-access-block \
+        --bucket <BUCKET_NAME> \
+        --public-access-block-configuration \
+        BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
