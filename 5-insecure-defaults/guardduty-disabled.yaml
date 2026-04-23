@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: MISCONFIGURATION - Amazon GuardDuty disabled (no threat detection or intelligent threat monitoring)
+Description: MISCONFIGURATION - Amazon GuardDuty disabled (no threat detection)
 
 Metadata:
   Misconfiguration:
@@ -8,196 +8,31 @@ Metadata:
     RuleId: "GUARDDUTY-001"
     Description: "Amazon GuardDuty is disabled. No intelligent threat detection, anomaly monitoring, or finding generation for your AWS account."
     Remediation: "Enable GuardDuty in all regions with S3 and SNS publishing for findings"
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
     Keywords:
       - "GuardDuty"
       - "Detector"
       - "FindingPublishingFrequency"
       - "EnableGuardDuty"
-    # LABEL FOR ML-BASED DETECTION
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION: GuardDuty is DISABLED (no detector resources defined)
-  
-  # This template documents the ABSENCE of GuardDuty configuration
-  # In a secure environment, you would have:
-  # 1. GuardDuty Detector enabled
-  # 2. Finding publishing frequency configured
-  # 3. S3 and SNS destinations for findings
-  # 4. Delegated administrator for multi-account
-  # 5. All regions enabled
-  
-  DocumentationOnly:
+  # This template documents the ABSENCE of a GuardDuty detector.
+  # No GuardDuty Detector resource is defined.
+  DocumentationPlaceholder:
     Type: AWS::CloudFormation::WaitConditionHandle
     Metadata:
-      GuardDutyMisconfiguration: |
-        
-        ============================================================
-        MISCONFIGURATION: Amazon GuardDuty DISABLED
-        ============================================================
-        
-        WHAT IS GUARDDUTY:
-        - Intelligent threat detection service
-        - Uses machine learning to detect suspicious activity
-        - Analyzes CloudTrail logs, VPC Flow Logs, DNS logs
-        - Detects: compromised EC2 instances, IAM misuse, reconnaissance
-        - Generates findings for security teams to investigate
-        
-        WHY THIS IS CRITICAL:
-        - NO threat detection for your AWS account
-        - Cannot detect compromised EC2 instances
-        - Cannot detect cryptocurrency mining
-        - Cannot detect unusual API calls (reconnaissance)
-        - Cannot detect data exfiltration patterns
-        - Security incidents go undetected
-        - Compliance audits FAIL without threat detection
-        
-        WHAT YOU ARE MISSING:
-        - Compromised instance detection (crypto mining, malware)
-        - IAM credential misuse detection
-        - Unusual API activity (reconnaissance)
-        - S3 data access anomalies
-        - DNS threat intelligence
-        - Network port scanning detection
-        - Malicious IP address monitoring
-        
-        ============================================================
-        DETECTION AND REMEDIATION
-        ============================================================
-        
-        DETECTION COMMAND:
-        aws guardduty list-detectors
-        
-        TO CHECK DETECTOR STATUS:
-        aws guardduty get-detector --detector-id <DETECTOR_ID>
-        
-        REMEDIATION:
-        1. Create GuardDuty Detector in each region
-        2. Set finding publishing frequency (15 minutes)
-        3. Configure S3 bucket for findings export
-        4. Configure SNS topic for alerts
-        5. Enable GuardDuty in ALL regions
-        6. Add delegated administrator for multi-account
-
-  # Example of what SHOULD be configured (commented - this is MISSING)
-  
-  # MissingGuardDutyDetector:
-  #   Type: AWS::GuardDuty::Detector
-  #   Properties:
-  #     Enable: true
-  #     FindingPublishingFrequency: "FIFTEEN_MINUTES"
-  #     DataSources:
-  #       S3Logs:
-  #         Enable: true
-  #       Kubernetes:
-  #         AuditLogs:
-  #           Enable: true
-  #
-  # MissingS3Destination:
-  #   Type: AWS::GuardDuty::S3Destination
-  #   Properties:
-  #     DetectorId: !GetAtt MissingGuardDutyDetector.Id
-  #     DestinationArn: !GetAtt MissingS3Bucket.Arn
-  #     KmsKeyArn: !GetAtt MissingKmsKey.Arn
-  #
-  # MissingSNSDestination:
-  #   Type: AWS::GuardDuty::SNSDestination
-  #   Properties:
-  #     DetectorId: !GetAtt MissingGuardDutyDetector.Id
-  #     DestinationArn: !GetAtt MissingSNSTopic.Arn
-  #
-  # MissingS3Bucket:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: !Sub "guardduty-findings-${AWS::AccountId}"
+      Note: "No GuardDuty detector is enabled – threat detection is disabled."
 
 Outputs:
-  RiskDescription:
-    Description: "Why disabled GuardDuty is CRITICAL"
-    Value: |
-      With GuardDuty DISABLED:
-      
-      - NO threat detection for your AWS account
-      - Compromised EC2 instances go undetected (crypto mining)
-      - Unusual API calls not flagged (reconnaissance)
-      - Data exfiltration patterns not identified
-      - IAM credential misuse not detected
-      - Compliance audits FAIL
-      
-      Real impact:
-      - EC2 instance compromised → No alert → Crypto mining runs for months ($100k bill)
-      - Attacker scanning for open ports → No detection → Attackers find vulnerable services
-      - IAM keys stolen → Unusual API calls from unknown IP → No alert
-      - S3 data accessed from suspicious IP → No detection
-  WhatYouCannotDetect:
-    Description: "Threats NOT being detected"
-    Value: |
-      - EC2: Crypto mining, reverse shells, C2 communication, port scanning
-      - IAM: Unusual API calls, credential misuse, privilege escalation
-      - S3: Anomalous data access, unusual patterns, large downloads
-      - DNS: DNS tunneling, known malicious domains, DGA domains
-      - Network: Port scanning, brute force attacks, suspicious traffic
-      - Kubernetes: Suspicious container activity, unauthorized access
-  AttackScenario:
-    Description: "How attacker exploits disabled GuardDuty"
-    Value: |
-      Scenario 1 - Crypto Mining:
-      1. Attacker compromises EC2 instance (vulnerable web app)
-      2. Attacker downloads crypto mining software
-      3. Attacker runs miner on your instance
-      4. GuardDuty OFF → No detection
-      5. Runs for 3 months → $50,000 AWS bill
-      6. Discovery only when bill arrives
-      
-      Scenario 2 - Data Theft:
-      1. Attacker steals IAM credentials
-      2. Attacker enumerates S3 buckets
-      3. Attacker downloads 10TB of customer data
-      4. GuardDuty OFF → No unusual activity alerts
-      5. Data appears on dark web weeks later
-      
-      Scenario 3 - Reconnaissance:
-      1. Attacker scans your IP ranges for open ports
-      2. Attacker maps your network architecture
-      3. GuardDuty OFF → No port scan detection
-      4. Attacker plans attack based on findings
+  Risk:
+    Description: "Security Risk"
+    Value: "With GuardDuty disabled, compromised EC2 instances, crypto mining, unusual API calls (reconnaissance), and data exfiltration go undetected. Compliance frameworks (CIS, PCI) require GuardDuty or equivalent detection."
   RemediationCommand:
-    Description: "Fix: Enable GuardDuty in all regions"
+    Description: "Fix: Enable GuardDuty in current region (and all regions)"
     Value: |
-      # Step 1: Enable GuardDuty in current region
+      # Enable in current region
       aws guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES
-      
-      # Step 2: Enable GuardDuty in ALL regions
+      # (Optional) Enable in all regions
       for region in $(aws ec2 describe-regions --query 'Regions[].RegionName' --output text); do
-        echo "Enabling GuardDuty in $region"
         aws guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES --region $region
       done
-      
-      # Step 3: Get detector ID
-      DETECTOR_ID=$(aws guardduty list-detectors --query 'DetectorIds[0]' --output text)
-      
-      # Step 4: Configure S3 export for findings
-      # aws guardduty create-s3-destination --detector-id $DETECTOR_ID ...
-      
-      # Step 5: Configure SNS for real-time alerts
-      # aws guardduty create-sns-destination --detector-id $DETECTOR_ID ...
-      
-      # Step 6: Verify GuardDuty is active
-      aws guardduty get-detector --detector-id $DETECTOR_ID
-  ComplianceViolation:
-    Description: "Compliance frameworks requiring GuardDuty"
-    Value: "CIS Benchmark (1.19 - enable GuardDuty), PCI DSS (Requirement 11.4 - intrusion detection), SOC 2 (CC7.2 - monitor systems), NIST 800-53 (SI-4 - system monitoring)"
-  TypesOfFindingsYouAreMissing:
-    Description: "Categories of security findings NOT being generated"
-    Value: |
-      - Backdoor: EC2 instances communicating with known C2 servers
-      - Behavioral: Unusual API patterns, anomaly detection
-      - CryptoCurrency: EC2 instances mining cryptocurrency
-      - Discovery: Reconnaissance, port scanning, service enumeration
-      - Exfiltration: Large data transfers, unusual S3 access
-      - Impact: Data destruction, resource deletion
-      - PenTest: Tool usage, penetration testing activity
-      - Persistence: Backdoor creation, unauthorized IAM changes
-      - PrivilegeEscalation: Unusual role assumption, permission increases
-      - Stealth: GuardDuty disable attempts, log deletion
