@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: MISCONFIGURATION - SQS queue with SSE (Server-Side Encryption) disabled
+Description: MISCONFIGURATION - SQS queue with SSE disabled (no server-side encryption)
 
 Metadata:
   Misconfiguration:
@@ -7,25 +7,20 @@ Metadata:
     Severity: "MEDIUM"
     RuleId: "SQS-001"
     Description: "SQS queue does not have server-side encryption enabled. Messages are stored unencrypted at rest, potentially exposing sensitive data."
-    Remediation: "Enable SSE-SQS encryption for the queue using AWS managed KMS key or customer managed key"
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Remediation: "Enable SSE-SQS encryption using AWS managed KMS key or customer managed key"
     Keywords:
-      - "SqsManagedSseEnabled"
       - "KmsMasterKeyId"
+      - "SqsManagedSseEnabled"
       - "SSE"
       - "encryption"
       - "sqs"
-    # LABEL FOR ML-BASED DETECTION
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION START: SQS queue with SSE disabled
-  
-  # MISCONFIGURATION 1: SQS queue with NO encryption
   UnencryptedSQSQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: "unencrypted-sqs-queue"
+      QueueName: !Sub "unencrypted-sqs-${AWS::StackName}"
       # MISCONFIGURATION: No KmsMasterKeyId property specified
       # SSE is disabled by default
       VisibilityTimeout: 30
@@ -33,179 +28,27 @@ Resources:
       DelaySeconds: 0
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
+        - Key: Name
+          Value: "Unencrypted-SQS-Queue"
         - Key: Misconfiguration
-          Value: "SQS-Encryption-Disabled"
+          Value: "SQS-001"
+        - Key: Category
+          Value: "Lack-of-Encryption"
         - Key: Severity
           Value: "MEDIUM"
-
-  # MISCONFIGURATION 2: FIFO queue with encryption disabled
-  UnencryptedFIFOQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: "unencrypted-fifo-queue.fifo"
-      FifoQueue: true
-      ContentBasedDeduplication: false
-      # MISCONFIGURATION: No encryption enabled
-      VisibilityTimeout: 30
-      MessageRetentionPeriod: 345600
-      Tags:
-        - Key: Misconfiguration
-          Value: "SQS-FIFO-Encryption-Disabled"
-
-  # MISCONFIGURATION 3: Queue with explicit SSE disabled (using AWS managed key - still not customer managed)
-  # Note: SSE-SQS is automatically enabled if you specify KmsMasterKeyId
-  # Not specifying it means encryption is DISABLED
-  QueueWithDefaultEncryption:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: "default-no-encryption-queue"
-      # MISCONFIGURATION: No KmsMasterKeyId = no encryption
-      # For SQS, you must explicitly set KmsMasterKeyId to enable SSE
-      Tags:
-        - Key: Misconfiguration
-          Value: "SQS-Default-No-Encryption"
-
-  # Example of CORRECT configuration with encryption (commented)
-  # EncryptedSQSQueue:
-  #   Type: AWS::SQS::Queue
-  #   Properties:
-  #     QueueName: "encrypted-sqs-queue"
-  #     KmsMasterKeyId: "alias/aws/sqs"  # AWS managed key for SQS
-  #     # OR use customer managed KMS key
-  #     # KmsMasterKeyId: !GetAtt CustomerKMSKey.Arn
-
-  # Sample Lambda to send/receive messages (demonstrates data flow)
-  SampleLambda:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: "sqs-message-handler"
-      Handler: "index.handler"
-      Runtime: "python3.9"
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          QUEUE_URL: !Ref UnencryptedSQSQueue
-      Code:
-        ZipFile: |
-          import boto3
-          import json
-          
-          def handler(event, context):
-              sqs = boto3.client('sqs')
-              queue_url = event.get('QUEUE_URL')
-              
-              # Sending message to unencrypted queue
-              # Message will be stored WITHOUT encryption
-              response = sqs.send_message(
-                  QueueUrl=queue_url,
-                  MessageBody=json.dumps({
-                      'user_id': '12345',
-                      'ssn': '123-45-6789',  # Sensitive data
-                      'credit_card': '4111111111111111'
-                  })
-              )
-              print(f"Message sent: {response['MessageId']}")
-              
-              # Receiving message (no decryption needed since no encryption)
-              messages = sqs.receive_message(
-                  QueueUrl=queue_url,
-                  MaxNumberOfMessages=1
-              )
-              print(f"Messages received: {messages}")
-              
-              return {'statusCode': 200, 'body': 'Messages processed'}
-
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: SQSPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - sqs:SendMessage
-                  - sqs:ReceiveMessage
-                  - sqs:DeleteMessage
-                  - sqs:GetQueueAttributes
-                Resource: !GetAtt UnencryptedSQSQueue.Arn
+        - Key: Batch
+          Value: "Batch-7"
 
 Outputs:
   QueueName:
-    Description: "SQS queue with encryption disabled"
+    Description: "SQS queue with SSE disabled"
     Value: !Ref UnencryptedSQSQueue
   QueueArn:
     Description: "ARN of unencrypted SQS queue"
     Value: !GetAtt UnencryptedSQSQueue.Arn
-  FIFOQueueName:
-    Description: "FIFO queue with encryption disabled"
-    Value: !Ref UnencryptedFIFOQueue
-  RiskDescription:
-    Description: "Why this is dangerous"
-    Value: |
-      SQS messages are stored unencrypted at rest:
-      - Sensitive data in messages (PII, credentials, financial data) is exposed
-      - Anyone with disk access can read raw message data
-      - Compliance violations for unencrypted data
-      - Backups of SQS data also unencrypted
-      
-      Common sensitive data found in SQS messages:
-      - User PII (names, addresses, SSNs, emails)
-      - Financial transactions (credit cards, amounts)
-      - Authentication tokens and credentials
-      - Healthcare data (PHI, patient records)
-      - Internal API keys and secrets
-  AttackScenario:
-    Description: "How data can be exposed"
-    Value: |
-      1. Attacker gains access to AWS account (compromised keys)
-      2. Attacker runs: aws sqs receive-message --queue-url <QUEUE_URL>
-      3. Messages are returned in PLAINTEXT (no decryption needed)
-      4. Attacker reads all sensitive data from messages
-      5. Attacker deletes messages after reading (cover tracks)
-      
-      Alternative scenario - Storage access:
-      1. Attacker gains physical access to AWS storage
-      2. SQS message data stored unencrypted on disk
-      3. Attacker reads raw message data directly
+  Risk:
+    Description: "Security Risk"
+    Value: "Messages are stored unencrypted at rest. Sensitive data (PII, credentials) is exposed to anyone with disk access or the sqs:ReceiveMessage permission."
   RemediationCommand:
-    Description: "Fix: Enable SSE on SQS queue"
-    Value: |
-      # Step 1: Enable SSE with AWS managed KMS key
-      aws sqs set-queue-attributes \
-        --queue-url <QUEUE_URL> \
-        --attributes '{"KmsMasterKeyId":"alias/aws/sqs"}'
-      
-      # Step 2: Verify encryption is enabled
-      aws sqs get-queue-attributes \
-        --queue-url <QUEUE_URL> \
-        --attribute-names KmsMasterKeyId
-      
-      # Step 3: For new queues, enable encryption at creation
-      # Using AWS managed key:
-      # aws sqs create-queue --queue-name encrypted-queue --attributes '{"KmsMasterKeyId":"alias/aws/sqs"}'
-      
-      # Using customer managed KMS key (more secure):
-      # aws sqs create-queue --queue-name encrypted-queue --attributes '{"KmsMasterKeyId":"arn:aws:kms:region:account:key/key-id"}'
-  EnableEncryptionConsole:
-    Description: "Steps to enable in AWS Console"
-    Value: |
-      1. Open SQS Console
-      2. Select your queue
-      3. Click "Edit"
-      4. Under "Encryption", select "Enable server-side encryption"
-      5. Choose KMS key (AWS managed SQS key or custom)
-      6. Click "Save"
-  ComplianceViolation:
-    Description: "Compliance frameworks requiring SQS encryption"
-    Value: "PCI DSS (Requirement 3.4 - encrypt cardholder data), HIPAA (encrypt PHI at rest), GDPR (Article 32), SOC 2 (CC6.1)"
+    Description: "Fix: Enable SSE using AWS managed SQS KMS key"
+    Value: !Sub "aws sqs set-queue-attributes --queue-url https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/${UnencryptedSQSQueue} --attributes '{\"KmsMasterKeyId\":\"alias/aws/sqs\"}'"
