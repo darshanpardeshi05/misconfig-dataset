@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: MISCONFIGURATION - Security group allows MongoDB (port 27017) from 0.0.0.0/0 (anyone on internet)
+Description: MISCONFIGURATION - Security group allows MongoDB (port 27017) from 0.0.0.0/0
 
 Metadata:
   Misconfiguration:
@@ -8,7 +8,6 @@ Metadata:
     RuleId: "SG-006"
     Description: "Security group allows MongoDB access from entire internet (0.0.0.0/0). MongoDB has no authentication by default in older versions - extremely dangerous."
     Remediation: "Restrict MongoDB access to specific application servers only. Enable MongoDB authentication and authorization."
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
     Keywords:
       - "port 27017"
       - "0.0.0.0/0"
@@ -17,59 +16,87 @@ Metadata:
       - "ToPort: 27017"
       - "MongoDB"
       - "DocumentDB"
-    # LABEL FOR ML-BASED DETECTION
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION START: Security group with MongoDB open to entire internet
-  
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: "10.0.0.0/16"
+      CidrBlock: "10.0.5.0/16"
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: "Network-Misconfig-VPC"
+          Value: "MongoDB-Misconfig-VPC"
+        - Key: Misconfiguration
+          Value: "SG-006"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-5"
 
-  # MISCONFIGURATION: Security group allowing MongoDB from anywhere
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.5.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: "MongoDB-Public-Subnet"
+        - Key: Misconfiguration
+          Value: "SG-006"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-5"
+
   MongoDBOpenSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: "MISCONFIGURATION - MongoDB open to world"
       VpcId: !Ref VPC
-      # MISCONFIGURATION START: MongoDB port 27017 open to 0.0.0.0/0
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 27017
           ToPort: 27017
-          CidrIp: "0.0.0.0/0"      # MISCONFIGURATION: Anyone can access MongoDB
+          CidrIp: "0.0.0.0/0"
         - IpProtocol: tcp
           FromPort: 27017
           ToPort: 27017
-          CidrIpv6: "::/0"         # MISCONFIGURATION: IPv6 also open
-      # MISCONFIGURATION END
+          CidrIpv6: "::/0"
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: "0.0.0.0/0"
       Tags:
+        - Key: Name
+          Value: "MongoDB-Open-SG"
         - Key: Misconfiguration
-          Value: "SG-MongoDB-Open-World"
+          Value: "SG-006"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-5"
 
-  # EC2 instance running MongoDB (self-managed) exposed to internet
   ExposedMongoDBInstance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
-      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
-      SubnetId: !Ref PublicSubnet1
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", AMI]
+      SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
         - !Ref MongoDBOpenSecurityGroup
       UserData:
         Fn::Base64: |
           #!/bin/bash
-          # Install MongoDB (INSECURE CONFIGURATION)
+          # Install MongoDB (insecure configuration - no auth)
           cat > /etc/yum.repos.d/mongodb-org-7.0.repo << EOF
           [mongodb-org-7.0]
           name=MongoDB Repository
@@ -79,67 +106,23 @@ Resources:
           gpgkey=https://www.mongodb.org/static/pgp/server-7.0.asc
           EOF
           yum install -y mongodb-org
-          
-          # MISCONFIGURATION: Bind to all interfaces (0.0.0.0) instead of localhost
+          # Bind to all interfaces (insecure)
           sed -i 's/bindIp: 127.0.0.1/bindIp: 0.0.0.0/g' /etc/mongod.conf
-          
-          # MISCONFIGURATION: No authentication enabled
-          # authorization: disabled (default)
-          
+          # No authentication enabled (default)
           systemctl start mongod
           systemctl enable mongod
-          
-          echo "MongoDB installed with NO AUTHENTICATION on port 27017"
       Tags:
         - Key: Name
-          Value: "Exposed-MongoDB-Server"
+          Value: "Exposed-MongoDB-Instance"
         - Key: Misconfiguration
-          Value: "MongoDB-No-Auth-Public"
+          Value: "SG-006"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-5"
 
-  # Alternative: AWS DocumentDB (MongoDB compatible) exposed
-  # Note: DocumentDB requires authentication but security group still open
-  ExposedDocumentDB:
-    Type: AWS::DocDB::DBCluster
-    Properties:
-      DBClusterIdentifier: "exposed-documentdb"
-      Engine: docdb
-      MasterUsername: "admin"
-      MasterUserPassword: "WeakPassword123!"
-      Port: 27017
-      DBSubnetGroupName: !Ref PublicDBSubnetGroup
-      VpcSecurityGroupIds:
-        - !Ref MongoDBOpenSecurityGroup
-      StorageEncrypted: false
-      Tags:
-        - Key: Misconfiguration
-          Value: "DocumentDB-Publicly-Accessible"
-
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: "10.0.1.0/24"
-      AvailabilityZone: !Sub "${AWS::Region}a"
-      MapPublicIpOnLaunch: true
-
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: "10.0.2.0/24"
-      AvailabilityZone: !Sub "${AWS::Region}b"
-      MapPublicIpOnLaunch: true
-
-  # Public DB subnet group for DocumentDB
-  PublicDBSubnetGroup:
-    Type: AWS::DocDB::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: "Public subnet group - MISCONFIGURATION"
-      SubnetIds:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-
-  # Internet Gateway for public access
   InternetGateway:
     Type: AWS::EC2::InternetGateway
 
@@ -162,19 +145,12 @@ Resources:
       DestinationCidrBlock: "0.0.0.0/0"
       GatewayId: !Ref InternetGateway
 
-  SubnetRouteAssociation1:
+  SubnetRouteAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet1
+      SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref RouteTable
 
-  SubnetRouteAssociation2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref RouteTable
-
-# Mapping for AMI IDs per region
 Mappings:
   AWSRegionArch2AMI:
     us-east-1:
@@ -188,35 +164,12 @@ Outputs:
   SecurityGroupId:
     Description: "Security group ID with MongoDB open to world"
     Value: !Ref MongoDBOpenSecurityGroup
-  MongoDBInstanceEndpoint:
-    Description: "MongoDB EC2 instance public IP"
+  InstancePublicIp:
+    Description: "Public IP of exposed MongoDB instance"
     Value: !GetAtt ExposedMongoDBInstance.PublicIp
-  DocumentDBEndpoint:
-    Description: "DocumentDB cluster endpoint"
-    Value: !GetAtt ExposedDocumentDB.Endpoint
-  MongoDBPort:
-    Description: "MongoDB port (27017)"
-    Value: "27017"
-  RiskDescription:
-    Description: "Why this is CRITICAL"
-    Value: "MongoDB has NO AUTHENTICATION by default in older versions. Anyone who can reach port 27017 can read, write, and delete all database contents without a password."
-  AttackScenario:
-    Description: "How attacker exploits this"
-    Value: |
-      1. Attacker scans for open port 27017 on AWS IP ranges
-      2. Attacker finds your MongoDB endpoint
-      3. Attacker connects: mongo --host your-mongodb.aws.com --port 27017
-      4. NO PASSWORD REQUIRED (default MongoDB has no auth)
-      5. Attacker runs: show dbs; use users; db.users.find();
-      6. Attacker steals ALL data
-      7. Attacker runs: db.dropDatabase() (deletes everything)
+  Risk:
+    Description: "Security Risk"
+    Value: "MongoDB has NO AUTHENTICATION by default. Anyone who can reach port 27017 can read, write, and delete all database contents without a password."
   RemediationCommand:
     Description: "Fix: Restrict security group and enable MongoDB auth"
-    Value: |
-      # Remove world-open security group rule
-      aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 27017 --cidr 0.0.0.0/0
-      # Enable MongoDB authentication (on EC2 instance)
-      # Edit /etc/mongod.conf: set security.authorization: enabled
-  ConnectionTestCommand:
-    Description: "Test if MongoDB is publicly accessible (no password needed)"
-    Value: "mongo --host <MONGO_ENDPOINT> --port 27017 --eval 'db.stats()'"
+    Value: !Sub "aws ec2 revoke-security-group-ingress --group-id ${MongoDBOpenSecurityGroup} --protocol tcp --port 27017 --cidr 0.0.0.0/0 && aws ec2 authorize-security-group-ingress --group-id ${MongoDBOpenSecurityGroup} --protocol tcp --port 27017 --cidr YOUR_APP_VPC_CIDR"
