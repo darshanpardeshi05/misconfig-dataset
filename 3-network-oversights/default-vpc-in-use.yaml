@@ -6,131 +6,61 @@ Metadata:
     Category: "Network Oversights"
     Severity: "MEDIUM"
     RuleId: "VPC-002"
-    Description: "Default VPC is being used instead of a custom VPC. Default VPC has auto-assigned public IPs and open network settings by default."
-    Remediation: "Create custom VPC with proper subnet design, security groups, and network controls. Avoid using default VPC for production workloads."
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Description: "Resources are deployed in the Default VPC. Default VPC has auto-assigned public IPs, permissive default security group, and lacks proper network controls."
+    Remediation: "Create custom VPC with private subnets, NAT gateways, and restricted security groups. Migrate all resources from default VPC."
     Keywords:
       - "Default VPC"
       - "isDefault"
       - "default-vpc"
-      - "vpc-id"
-      - "vpc-xxxxxx"
-    # LABEL FOR ML-BASED DETECTION
+      - "MapPublicIpOnLaunch: true"
+      - "default security group"
     ML_Label: "misconfiguration"
 
-# IMPORTANT NOTE:
-# Default VPC is created automatically by AWS in each region.
-# This template documents the misconfiguration of USING the default VPC.
-# The actual default VPC cannot be created via CloudFormation (it's AWS managed).
-# This template represents the scenario where resources are deployed in default VPC.
-
 Resources:
-  # MISCONFIGURATION: Resources deployed in Default VPC
-  # In real scenario, these resources would use the default VPC ID
-  
-  # Note: To actually deploy in default VPC, you would need to:
-  # 1. Get default VPC ID: aws ec2 describe-vpcs --filters "Name=isDefault,Values=true"
-  # 2. Use that VPC ID in your resources
-  
-  # This template creates a custom VPC but documents the default VPC issues
-  DocumentationOnly:
-    Type: AWS::CloudFormation::WaitConditionHandle
-    Metadata:
-      DefaultVPCMisconfiguration: |
-        
-        ============================================================
-        MISCONFIGURATION: USING DEFAULT VPC
-        ============================================================
-        
-        WHAT IS DEFAULT VPC:
-        - AWS automatically creates a default VPC in each region
-        - Comes with default subnets, route tables, and internet gateway
-        - All subnets have MapPublicIpOnLaunch = true
-        - Default security group allows all outbound and inbound from same group
-        
-        WHY THIS IS A PROBLEM:
-        
-        1. AUTO-ASSIGNED PUBLIC IPS:
-           - Every EC2 instance launched gets a public IP automatically
-           - Increases attack surface unnecessarily
-        
-        2. DEFAULT SECURITY GROUP IS TOO PERMISSIVE:
-           - Allows all traffic between resources in default SG
-           - No segmentation between different application tiers
-        
-        3. DEFAULT NETWORK ACL ALLOWS ALL TRAFFIC:
-           - No inbound or outbound restrictions
-        
-        4. NO CUSTOM NETWORK CONTROLS:
-           - Cannot implement proper network segmentation
-           - Cannot enforce compliance requirements
-        
-        5. DIFFICULT TO TRACK:
-           - Multiple teams using default VPC creates confusion
-           - Security boundaries are blurred
-        
-        WHAT DEFAULT VPC ALLOWS BY DEFAULT:
-        - EC2 with public IPs
-        - All ports open between instances in default SG
-        - Internet access via IGW
-        - No flow logs
-        - No VPC endpoints for private access
-        
-        PROPER CUSTOM VPC SHOULD HAVE:
-        - Private and public subnets
-        - NAT gateways for private subnet internet access
-        - Network ACLs for subnet-level security
-        - VPC Flow Logs enabled
-        - VPC endpoints for AWS services
-        - No auto-assign public IP on private subnets
-        
-        ============================================================
-        DETECTION AND REMEDIATION
-        ============================================================
-        
-        DETECTION COMMAND:
-        aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query 'Vpcs[*].VpcId'
-        
-        TO FIND RESOURCES IN DEFAULT VPC:
-        aws ec2 describe-instances --filters "Name=vpc-id,Values=<DEFAULT_VPC_ID>"
-        
-        REMEDIATION:
-        1. Create custom VPC with proper design
-        2. Migrate resources to custom VPC
-        3. Do not use default VPC for production workloads
-        4. Consider deleting default VPC if not in use
-
-  # Example of what NOT to do (using default VPC)
-  # This EC2 instance would get auto-assigned public IP in default VPC
-  BadExampleEC2:
+  # Launching an EC2 instance WITHOUT specifying VpcId or SubnetId
+  # AWS will automatically launch it in the Default VPC and Default Subnet
+  DefaultVPCInstance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
-      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
-      # MISCONFIGURATION: No VpcId specified - will use default VPC
-      # No SubnetId specified - will use default subnet
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", AMI]
+      # No VpcId, no SubnetId → uses Default VPC
       SecurityGroupIds:
-        - !Ref DefaultSecurityGroup
+        - !Ref DefaultVPCCompatibleSG
       Tags:
+        - Key: Name
+          Value: "Default-VPC-Instance"
         - Key: Misconfiguration
-          Value: "Default-VPC-Usage"
-        - Key: Warning
-          Value: "This instance gets auto-assigned public IP"
+          Value: "VPC-002"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "MEDIUM"
+        - Key: Batch
+          Value: "Batch-7"
 
-  # Default security group (permissive)
-  DefaultSecurityGroup:
+  # A permissive security group to mirror Default SG behavior (optional)
+  DefaultVPCCompatibleSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "Default-like permissive security group"
-      # MISCONFIGURATION: Allows all inbound from same group
+      GroupDescription: "Permissive security group for Default VPC demo"
       SecurityGroupIngress:
-        - IpProtocol: -1
-          SourceSecurityGroupId: !Ref DefaultSecurityGroup
-      SecurityGroupEgress:
-        - IpProtocol: -1
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
           CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Name
+          Value: "Default-VPC-SG"
+        - Key: Misconfiguration
+          Value: "VPC-002"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "MEDIUM"
+        - Key: Batch
+          Value: "Batch-7"
 
-# Mapping for AMI IDs per region
 Mappings:
   AWSRegionArch2AMI:
     us-east-1:
@@ -141,31 +71,12 @@ Mappings:
       AMI: ami-07470b0ad10cbe60e
 
 Outputs:
-  RiskDescription:
-    Description: "Why default VPC is dangerous"
-    Value: |
-      Default VPC has:
-      - Auto-assigned public IPs (increased attack surface)
-      - Overly permissive default security group
-      - No network segmentation
-      - No VPC Flow Logs by default
-      - Cannot enforce compliance requirements
-  DetectionCommand:
-    Description: "Command to find default VPC in your account"
-    Value: "aws ec2 describe-vpcs --filters 'Name=isDefault,Values=true'"
-  ResourcesInDefaultVPCCommand:
-    Description: "Command to find all EC2 instances in default VPC"
-    Value: "aws ec2 describe-instances --filters Name=vpc-id,Values=<DEFAULT_VPC_ID>"
-  RemediationSteps:
-    Description: "How to fix"
-    Value: |
-      1. Create custom VPC: aws ec2 create-vpc --cidr-block 10.0.0.0/16
-      2. Create public and private subnets
-      3. Create NAT gateway for private subnets
-      4. Migrate resources to custom VPC
-      5. Update security groups and network ACLs
-      6. Delete resources from default VPC
-      7. Consider deleting default VPC: aws ec2 delete-vpc --vpc-id <DEFAULT_VPC_ID>
-  BestPracticeNote:
-    Description: "Best practice"
-    Value: "Never use default VPC for production workloads. Always create purpose-built custom VPCs with proper security controls."
+  InstanceId:
+    Description: "EC2 instance deployed in Default VPC"
+    Value: !Ref DefaultVPCInstance
+  Risk:
+    Description: "Security Risk"
+    Value: "Using default VPC increases attack surface (auto-assigned public IPs, open default security group, no network segmentation)."
+  RemediationCommand:
+    Description: "Fix: Migrate to custom VPC"
+    Value: "Create custom VPC with public/private subnets, then recreate resources in that VPC. Delete default VPC resources when migration is complete."
