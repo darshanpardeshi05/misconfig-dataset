@@ -8,105 +8,91 @@ Metadata:
     RuleId: "EC2-001"
     Description: "EC2 instance is launched in a public subnet with auto-assign public IP enabled. This gives the instance a public IP address, increasing attack surface unnecessarily."
     Remediation: "Use private subnets for workloads that don't need direct internet access. If public IP is required, restrict security groups to specific IPs."
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
     Keywords:
       - "MapPublicIpOnLaunch: true"
       - "AssociatePublicIpAddress: true"
       - "PublicIp"
       - "auto-assign"
-    # LABEL FOR ML-BASED DETECTION
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION START: VPC with public subnet that auto-assigns public IPs
-  
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: "10.0.0.0/16"
+      CidrBlock: "10.0.16.0/16"
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: "Insecure-Defaults-VPC"
+          Value: "Public-IP-Misconfig-VPC"
+        - Key: Batch
+          Value: "Batch-8"
 
-  # MISCONFIGURATION: Public subnet with auto-assign public IP enabled
   PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: "10.0.1.0/24"
+      CidrBlock: "10.0.16.0/24"
       AvailabilityZone: !Sub "${AWS::Region}a"
-      # MISCONFIGURATION: Auto-assign public IPs to all instances launched here
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: "Public-Subnet-Auto-IP"
         - Key: Misconfiguration
-          Value: "EC2-Auto-Assign-Public-IP"
+          Value: "EC2-001"
+        - Key: Category
+          Value: "Insecure-Defaults"
+        - Key: Severity
+          Value: "MEDIUM"
+        - Key: Batch
+          Value: "Batch-8"
 
-  # MISCONFIGURATION: EC2 instance in public subnet (gets public IP automatically)
-  EC2WithPublicIP:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: t2.micro
-      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
-      SubnetId: !Ref PublicSubnet
-      # MISCONFIGURATION: No explicit setting - inherits subnet's MapPublicIpOnLaunch
-      SecurityGroupIds:
-        - !Ref PublicAccessSecurityGroup
-      KeyName: "test-key"
-      Tags:
-        - Key: Name
-          Value: "Instance-With-Public-IP"
-        - Key: Misconfiguration
-          Value: "EC2-Auto-Assign-Public-IP"
-
-  # MISCONFIGURATION: Security group with open SSH (compound issue)
   PublicAccessSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "Security group with open SSH"
+      GroupDescription: "Security group with open SSH for demonstration"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: "0.0.0.0/0"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: "0.0.0.0/0"
       Tags:
-        - Key: Misconfiguration
-          Value: "SG-Open-SSH"
+        - Key: Name
+          Value: "Public-SG-With-SSH"
+        - Key: Batch
+          Value: "Batch-8"
 
-  # MISCONFIGURATION 2: Network interface with explicit public IP association
-  PublicNetworkInterface:
-    Type: AWS::EC2::NetworkInterface
-    Properties:
-      SubnetId: !Ref PublicSubnet
-      Description: "Network interface with public IP"
-      Tags:
-        - Key: Misconfiguration
-          Value: "Public-IP-Assigned"
-
-  # EC2 instance using network interface with public IP
-  EC2WithExplicitPublicIP:
+  EC2WithPublicIP:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
-      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
-      NetworkInterfaces:
-        - NetworkInterfaceId: !Ref PublicNetworkInterface
-          DeviceIndex: 0
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", AMI]
+      SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
         - !Ref PublicAccessSecurityGroup
       Tags:
         - Key: Name
-          Value: "Instance-With-Explicit-Public-IP"
+          Value: "Instance-With-Public-IP"
         - Key: Misconfiguration
-          Value: "EC2-Explicit-Public-IP"
+          Value: "EC2-001"
+        - Key: Category
+          Value: "Insecure-Defaults"
+        - Key: Severity
+          Value: "MEDIUM"
+        - Key: Batch
+          Value: "Batch-8"
 
-  # Internet Gateway for public access
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+    Tags:
+      - Key: Name
+        Value: "Public-IP-IGW"
+      - Key: Batch
+        Value: "Batch-8"
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -118,6 +104,11 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: "Public-RT"
+        - Key: Batch
+          Value: "Batch-8"
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -133,21 +124,6 @@ Resources:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref RouteTable
 
-  # Example of CORRECT configuration (private subnet, no public IP)
-  # PrivateSubnet:
-  #   Type: AWS::EC2::Subnet
-  #   Properties:
-  #     VpcId: !Ref VPC
-  #     CidrBlock: "10.0.2.0/24"
-  #     MapPublicIpOnLaunch: false
-  #
-  # PrivateEC2Instance:
-  #   Type: AWS::EC2::Instance
-  #   Properties:
-  #     SubnetId: !Ref PrivateSubnet
-  #     ... other properties
-
-# Mapping for AMI IDs per region
 Mappings:
   AWSRegionArch2AMI:
     us-east-1:
@@ -164,48 +140,12 @@ Outputs:
   PublicIpAddress:
     Description: "Public IP address assigned to instance"
     Value: !GetAtt EC2WithPublicIP.PublicIp
-  SubnetId:
-    Description: "Public subnet with auto-assign public IP enabled"
-    Value: !Ref PublicSubnet
-  RiskDescription:
-    Description: "Why this is dangerous"
-    Value: |
-      EC2 instance has a public IP address and is directly reachable from the internet:
-      - Increased attack surface (anyone can attempt to connect)
-      - SSH/RDP/HTTP ports exposed to the world
-      - Bypasses network segmentation best practices
-      - Compliance violations for sensitive workloads
-      
-      If combined with open security groups (as shown), the instance is completely exposed.
-  AttackScenario:
-    Description: "How attacker exploits this"
-    Value: |
-      1. Attacker scans AWS IP ranges for open ports
-      2. Attacker finds your instance's public IP
-      3. Attacker sees open SSH port (22)
-      4. Attacker brute forces SSH password
-      5. Attacker gains access to instance
-      6. Attacker uses instance as entry point to your VPC
+  Risk:
+    Description: "Security Risk"
+    Value: "Instance has a public IP and open SSH (0.0.0.0/0). Directly reachable from internet – brute force and attack risk."
   RemediationCommand:
-    Description: "Fix: Remove public IP or move to private subnet"
+    Description: "Fix: Stop instance, modify network interface to remove public IP, or move to private subnet"
     Value: |
-      # Option 1: Stop instance and modify network interface
       aws ec2 stop-instances --instance-ids <INSTANCE_ID>
       aws ec2 modify-network-interface-attribute --network-interface-id <ENI_ID> --no-associate-public-ip-address
       aws ec2 start-instances --instance-ids <INSTANCE_ID>
-      
-      # Option 2: Create new private subnet and migrate
-      aws ec2 create-subnet --vpc-id <VPC_ID> --cidr-block 10.0.2.0/24
-      # Then migrate instance to private subnet
-      
-      # Option 3: If public IP is required, restrict security group
-      aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 22 --cidr 0.0.0.0/0
-      aws ec2 authorize-security-group-ingress --group-id <SG_ID> --protocol tcp --port 22 --cidr YOUR_IP/32
-  BestPractice:
-    Description: "Best practice for EC2 networking"
-    Value: |
-      - Use private subnets for application servers and databases
-      - Use public subnets only for load balancers, NAT gateways, bastion hosts
-      - Never auto-assign public IPs to internal workloads
-      - Use VPN or Direct Connect for private access
-      - Use Systems Manager Session Manager instead of SSH
