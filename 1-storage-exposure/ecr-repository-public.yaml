@@ -4,54 +4,76 @@ Description: MISCONFIGURATION - ECR repository with public pull access
 # METADATA - For research tracking and automated detection
 Metadata:
   Misconfiguration:
-    Category: "Storage Exposure"
+    Category: "Storage-Exposure"
     Severity: "HIGH"
     RuleId: "ECR-001"
-    Description: "ECR repository allows public pull access (anyone can pull images without AWS authentication)"
-    Remediation: "Disable public pull access and use IAM permissions only"
+    Description: "ECR repository allows public pull access (anyone can pull images without authentication)"
+    Remediation: "Restrict repository policy to specific IAM principals and enable image scanning"
+    Keywords:
+      - "ECR public"
+      - "Principal *"
+      - "public repository"
+      - "docker pull public"
+      - "ScanOnPush false"
+    ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION: ECR repository with public pull access enabled
+
   PublicECRRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: "public-repo-misconfig"
-      # MISCONFIGURATION START: Public pull access enabled
+
+      # Unique repository name
+      RepositoryName: !Sub "public-repo-${AWS::AccountId}-${AWS::StackName}"
+
+      # MISCONFIGURATION: Public pull access allowed
       RepositoryPolicyText:
         Version: "2012-10-17"
         Statement:
           - Effect: "Allow"
-            Principal: "*"           # MISCONFIGURATION: Anyone (no authentication required)
+            Principal: "*"
             Action:
               - "ecr:GetDownloadUrlForLayer"
               - "ecr:BatchGetImage"
               - "ecr:BatchCheckLayerAvailability"
-            Condition:
-              StringLike:
-                "aws:sourceArn": "arn:aws:ecr:*:*:repository/public-repo-misconfig"
-      # MISCONFIGURATION END
-      
-      # MISCONFIGURATION: Image scanning is disabled (optional misconfig)
-      ImageScanningConfiguration:
-        ScanOnPush: false            # MISCONFIGURATION: Should be true
-      
-      # MISCONFIGURATION: Encryption not enforced
-      EncryptionConfiguration:
-        EncryptionType: "AES256"     # Using AWS managed key instead of customer managed KMS (less secure but not critical)
 
-  # Docker image to push as example (requires Docker and AWS CLI after deployment)
-  # After stack creation, push an image using:
-  # aws ecr get-login-password --region <region> | docker login --username AWS --password-stdin <account-id>.dkr.ecr.<region>.amazonaws.com
-  # docker tag nginx:latest <account-id>.dkr.ecr.<region>.amazonaws.com/public-repo-misconfig:latest
-  # docker push <account-id>.dkr.ecr.<region>.amazonaws.com/public-repo-misconfig:latest
+      # MISCONFIGURATION: Image scanning disabled
+      ImageScanningConfiguration:
+        ScanOnPush: false
+
+      # Weak encryption configuration (not critical but included)
+      EncryptionConfiguration:
+        EncryptionType: "AES256"
+
+      # Tags used for filtering, classification, and mapping
+      Tags:
+        - Key: Name
+          Value: "ECR-Public-Repository"
+        - Key: Misconfiguration
+          Value: "ECR-001"
+        - Key: Category
+          Value: "Storage-Exposure"
+        - Key: Severity
+          Value: "HIGH"
+        - Key: Batch
+          Value: "Batch-1"
 
 Outputs:
   RepositoryUri:
-    Description: "ECR repository URI (anyone can pull from this)"
+    Description: "ECR repository URI"
     Value: !GetAtt PublicECRRepository.RepositoryUri
+
   PublicPullCommand:
-    Description: "Command to pull from this public repo (no AWS credentials needed)"
-    Value: !Sub "docker pull ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/public-repo-misconfig:latest"
-  MakePrivateCommand:
-    Description: "Command to fix: Delete the public policy"
-    Value: !Sub "aws ecr set-repository-policy --repository-name public-repo-misconfig --policy-text ''"
+    Description: "Command to pull image (after pushing one)"
+    Value: !Sub "docker pull ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${PublicECRRepository}:latest"
+
+  Risk:
+    Description: "Security Risk"
+    Value: "Public repository allows anyone to download container images, exposing sensitive application code."
+
+  FixCommand:
+    Description: "Remediation Command"
+    Value: |
+      aws ecr set-repository-policy \
+        --repository-name <REPO_NAME> \
+        --policy-text '{}'
