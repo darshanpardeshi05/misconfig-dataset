@@ -4,25 +4,61 @@ Description: MISCONFIGURATION - S3 bucket with Block Public Access disabled
 # METADATA - For research tracking and automated detection
 Metadata:
   Misconfiguration:
-    Category: "Storage Exposure"
+    Category: "Storage-Exposure"
     Severity: "HIGH"
     RuleId: "S3-003"
-    Description: "S3 bucket has Block Public Access completely disabled while bucket itself may be private, but this setting allows future public access"
+    Description: "S3 bucket has Block Public Access completely disabled, allowing future public exposure"
     Remediation: "Enable Block Public Access for the bucket or at account level"
+    Keywords:
+      - "BlockPublicAccess disabled"
+      - "PublicAccessBlock false"
+      - "S3 no protection"
+      - "Public policy allowed"
+      - "Public ACL allowed"
+    ML_Label: "misconfiguration"
 
 Resources:
   NoBlockPublicAccessBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "no-block-public-${AWS::AccountId}"
-      
-      # No explicit AccessControl set (defaults to private)
-      # But Block Public Access is completely disabled - MISCONFIGURATION
-      
-      # MISCONFIGURATION START: All Block Public Access settings are disabled
+
+      # Unique bucket name to avoid global conflicts
+      BucketName: !Sub "s3-no-block-public-${AWS::AccountId}-${AWS::StackName}"
+
+      # Default ACL is private, but protection is removed
+      # MISCONFIGURATION: Block Public Access fully disabled
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: false      # Should be true - allows public ACLs
-        BlockPublicPolicy: false    # Should be true - allows public policies
-        IgnorePublicAcls: false     # Should be true - does not ignore public ACLs
-        RestrictPublicBuckets: false # Should be true - does not restrict public buckets
-      # MISCONFIGURATION END
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+      # Tags used for filtering, classification, and mapping
+      Tags:
+        - Key: Name
+          Value: "S3-No-Block-Public-Bucket"
+        - Key: Misconfiguration
+          Value: "S3-003"
+        - Key: Category
+          Value: "Storage-Exposure"
+        - Key: Severity
+          Value: "HIGH"
+        - Key: Batch
+          Value: "Batch-1"
+
+Outputs:
+  BucketName:
+    Description: "Name of the S3 bucket with Block Public Access disabled"
+    Value: !Ref NoBlockPublicAccessBucket
+
+  Risk:
+    Description: "Security Risk"
+    Value: "Block Public Access is disabled, allowing future policies or ACLs to expose the bucket publicly."
+
+  FixCommand:
+    Description: "Remediation Command"
+    Value: |
+      aws s3api put-public-access-block \
+        --bucket <BUCKET_NAME> \
+        --public-access-block-configuration \
+        BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
