@@ -8,6 +8,13 @@ Metadata:
     RuleId: "IAM-010"
     Description: "IAM access key is older than 90 days and has not been rotated"
     Remediation: "Rotate access keys every 90 days"
+    Keywords:
+      - "AccessKey"
+      - "CreateDate"
+      - "Key rotation"
+      - "Old access key"
+      - "> 90 days"
+    ML_Label: "misconfiguration"
 
 Resources:
 
@@ -17,8 +24,16 @@ Resources:
   UserWithOldKey:
     Type: AWS::IAM::User
     Properties:
-      UserName: "user-old-key"
+      UserName: !Sub "user-old-key-${AWS::StackName}"
       Tags:
+        - Key: Name
+          Value: "User-Old-Key"
+        - Key: Misconfiguration
+          Value: "IAM-010"
+        - Key: Category
+          Value: "IAM-OverPermission"
+        - Key: Severity
+          Value: "MEDIUM"
         - Key: KeyAge
           Value: "Old (>90 days simulated)"
 
@@ -34,7 +49,16 @@ Resources:
   AdminUserOldKey:
     Type: AWS::IAM::User
     Properties:
-      UserName: "admin-old-key"
+      UserName: !Sub "admin-old-key-${AWS::StackName}"
+      Tags:
+        - Key: Name
+          Value: "Admin-Old-Key"
+        - Key: Misconfiguration
+          Value: "IAM-010"
+        - Key: Category
+          Value: "IAM-OverPermission"
+        - Key: Severity
+          Value: "MEDIUM"
 
   AdminAccessKey:
     Type: AWS::IAM::AccessKey
@@ -45,7 +69,7 @@ Resources:
   AdminPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: "AdminFullAccess"
+      PolicyName: !Sub "AdminFullAccess-${AWS::StackName}"
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -61,7 +85,16 @@ Resources:
   ServiceUserOldKey:
     Type: AWS::IAM::User
     Properties:
-      UserName: "service-old-key"
+      UserName: !Sub "service-old-key-${AWS::StackName}"
+      Tags:
+        - Key: Name
+          Value: "Service-Old-Key"
+        - Key: Misconfiguration
+          Value: "IAM-010"
+        - Key: Category
+          Value: "IAM-OverPermission"
+        - Key: Severity
+          Value: "MEDIUM"
 
   ServiceAccessKey:
     Type: AWS::IAM::AccessKey
@@ -72,7 +105,7 @@ Resources:
   ServicePolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: "ServiceLimitedAccess"
+      PolicyName: !Sub "ServiceLimitedAccess-${AWS::StackName}"
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -88,18 +121,26 @@ Resources:
 # OUTPUTS
 # =========================================================
 Outputs:
-
   NormalUser:
+    Description: "Normal user with old key"
     Value: !Ref UserWithOldKey
 
   AdminUser:
+    Description: "Admin user with old key (higher risk)"
     Value: !Ref AdminUserOldKey
 
   ServiceUser:
+    Description: "Service account with old key"
     Value: !Ref ServiceUserOldKey
 
+  Risk:
+    Description: "Security Risk"
+    Value: "Old access keys increase risk of credential exposure and unauthorized access."
+
   CheckKeysCommand:
+    Description: "Check key age"
     Value: "aws iam list-access-keys --user-name <USERNAME>"
 
   FixCommand:
+    Description: "Rotate key"
     Value: "aws iam update-access-key --user-name <USERNAME> --access-key-id <KEY_ID> --status Inactive && aws iam delete-access-key --user-name <USERNAME> --access-key-id <KEY_ID>"
