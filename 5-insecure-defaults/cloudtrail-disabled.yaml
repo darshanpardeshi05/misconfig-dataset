@@ -8,175 +8,35 @@ Metadata:
     RuleId: "CT-001"
     Description: "AWS CloudTrail is disabled. No API activity logs are captured, making it impossible to audit who did what, when, and from where in your AWS account."
     Remediation: "Enable CloudTrail in all regions with log file validation and encryption. Send logs to CloudWatch Logs and S3 bucket with appropriate permissions."
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
     Keywords:
       - "CloudTrail"
       - "Trail"
       - "IsMultiRegionTrail"
       - "EnableLogFileValidation"
       - "S3BucketName"
-    # LABEL FOR ML-BASED DETECTION
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION: CloudTrail is DISABLED (no trail resources defined)
-  
-  # This template documents the ABSENCE of CloudTrail configuration
-  # In a secure environment, you would have:
-  # 1. Multi-region CloudTrail enabled
-  # 2. S3 bucket for log storage
-  # 3. CloudWatch Logs for real-time monitoring
-  # 4. Log file validation enabled
-  # 5. Encryption enabled
-  # 6. File integrity validation
-  
-  DocumentationOnly:
+  # This template documents the ABSENCE of any CloudTrail trail.
+  # No trail resource is defined; CloudTrail remains disabled.
+  # The misconfiguration is that nothing is configured for logging.
+  DocumentationPlaceholder:
     Type: AWS::CloudFormation::WaitConditionHandle
     Metadata:
-      CloudTrailMisconfiguration: |
-        
-        ============================================================
-        MISCONFIGURATION: AWS CloudTrail DISABLED
-        ============================================================
-        
-        WHAT IS CLOUDTRAIL:
-        - Records ALL API calls made to AWS services
-        - Captures: who made the call, when, from where, what action
-        - Essential for security investigations and compliance audits
-        
-        WHY THIS IS CRITICAL:
-        - NO visibility into API activity
-        - Cannot detect unauthorized access
-        - Cannot investigate security incidents
-        - Compliance violations (PCI DSS, HIPAA, SOC 2)
-        - Attacker can delete resources with NO evidence
-        - No forensic data after breach
-        
-        WHAT YOU ARE MISSING:
-        - API calls from Console, CLI, SDK, CloudFormation, etc.
-        - IAM user/role activity
-        - Service-to-service API calls
-        - Failed authentication attempts
-        - Resource creation, modification, deletion
-        - Changes to security settings
-        
-        ============================================================
-        DETECTION AND REMEDIATION
-        ============================================================
-        
-        DETECTION COMMAND:
-        aws cloudtrail describe-trails
-        
-        TO CHECK IF ANY TRAIL IS LOGGING:
-        aws cloudtrail get-trail-status --name <TRAIL_NAME>
-        
-        REMEDIATION:
-        1. Create S3 bucket for logs (with proper permissions)
-        2. Create CloudWatch Logs group
-        3. Enable CloudTrail in ALL regions
-        4. Enable log file validation
-        5. Enable encryption (SSE-S3 or SSE-KMS)
-        6. Set up SNS notifications for log delivery failures
-
-  # Example of what SHOULD be configured (commented - this is MISSING)
-  
-  # MissingS3Bucket:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: !Sub "cloudtrail-logs-${AWS::AccountId}"
-  #     VersioningConfiguration:
-  #       Status: Enabled
-  #     LifecycleConfiguration:
-  #       Rules:
-  #         - Id: "MoveToGlacier"
-  #           Status: "Enabled"
-  #           Transitions:
-  #             - StorageClass: "GLACIER"
-  #               TransitionInDays: 90
-  #
-  # MissingBucketPolicy:
-  #   Type: AWS::S3::BucketPolicy
-  #   Properties:
-  #     Bucket: !Ref MissingS3Bucket
-  #     PolicyDocument:
-  #       Statement:
-  #         - Effect: Allow
-  #           Principal:
-  #             Service: cloudtrail.amazonaws.com
-  #           Action: s3:PutObject
-  #           Resource: !Sub "${MissingS3Bucket.Arn}/AWSLogs/${AWS::AccountId}/*"
-  #
-  # MissingCloudTrail:
-  #   Type: AWS::CloudTrail::Trail
-  #   Properties:
-  #     Name: "multi-region-cloudtrail"
-  #     S3BucketName: !Ref MissingS3Bucket
-  #     IsMultiRegionTrail: true
-  #     EnableLogFileValidation: true
-  #     IncludeGlobalServiceEvents: true
-  #     CloudWatchLogsLogGroupArn: !GetAtt MissingLogGroup.Arn
-  #     CloudWatchLogsRoleArn: !GetAtt MissingCloudTrailRole.Arn
+      Note: "No CloudTrail trail is defined – audit logging is disabled."
 
 Outputs:
-  RiskDescription:
-    Description: "Why disabled CloudTrail is CRITICAL"
-    Value: |
-      With CloudTrail DISABLED:
-      
-      - NO record of who accessed your AWS account
-      - NO evidence of security incidents
-      - NO forensic data after a breach
-      - Attacker can delete resources WITHOUT leaving traces
-      - Cannot meet compliance requirements
-      - Cannot detect malicious activity
-      - Security audits become impossible
-      
-      Real impact:
-      - Breach occurs → no logs to investigate
-      - Attacker deletes CloudTrail logs (if they exist) to hide tracks
-      - Compliance audit FAILS → fines up to $1M per day
-  WhatYouCannotSee:
-    Description: "API calls NOT being logged"
-    Value: |
-      - EC2: RunInstances, TerminateInstances, StopInstances
-      - S3: DeleteBucket, PutBucketPolicy, PutObject
-      - IAM: CreateUser, AttachPolicy, CreateAccessKey
-      - RDS: DeleteDBInstance, ModifyDBInstance
-      - Lambda: UpdateFunctionCode, Invoke
-      - CloudTrail itself: UpdateTrail, StopLogging (if attacker disables logging)
-  AttackScenario:
-    Description: "How attacker exploits disabled CloudTrail"
-    Value: |
-      1. Attacker compromises IAM credentials
-      2. Attacker launches crypto-mining EC2 instances ($50k/month cost)
-      3. Attacker deletes sensitive data from S3
-      4. Attacker creates new IAM users for persistence
-      5. NO LOGS captured - security team sees NOTHING
-      6. Breach discovered weeks later by unexpected AWS bill
-      7. No forensic evidence to determine breach cause
-      8. Company cannot prove data was deleted (liability issues)
+  Risk:
+    Description: "Security Risk"
+    Value: "With CloudTrail disabled, there is no record of API calls. Security incidents cannot be investigated, and compliance frameworks (PCI DSS, HIPAA, SOC 2) will fail."
   RemediationCommand:
-    Description: "Fix: Enable CloudTrail in all regions"
+    Description: "Fix: Enable multi-region CloudTrail with log file validation and S3 bucket"
     Value: |
-      # Step 1: Create S3 bucket for logs
+      # Create S3 bucket for logs
       aws s3api create-bucket --bucket cloudtrail-logs-<ACCOUNT_ID> --create-bucket-configuration LocationConstraint=<REGION>
-      
-      # Step 2: Enable bucket versioning
+      # Enable versioning
       aws s3api put-bucket-versioning --bucket cloudtrail-logs-<ACCOUNT_ID> --versioning-configuration Status=Enabled
-      
-      # Step 3: Create multi-region CloudTrail
-      aws cloudtrail create-trail \
-        --name multi-region-cloudtrail \
-        --s3-bucket-name cloudtrail-logs-<ACCOUNT_ID> \
-        --is-multi-region-trail \
-        --enable-log-file-validation \
-        --include-global-service-events
-      
-      # Step 4: Start logging
+      # Create multi-region trail
+      aws cloudtrail create-trail --name multi-region-cloudtrail --s3-bucket-name cloudtrail-logs-<ACCOUNT_ID> --is-multi-region-trail --enable-log-file-validation --include-global-service-events
+      # Start logging
       aws cloudtrail start-logging --name multi-region-cloudtrail
-      
-      # Step 5: Verify it's working
-      aws cloudtrail get-trail-status --name multi-region-cloudtrail
-  ComplianceViolation:
-    Description: "Compliance frameworks requiring CloudTrail"
-    Value: "PCI DSS (Requirement 10 - log all access), HIPAA (164.312(b) - audit controls), SOC 2 (CC7.2 - monitor systems), CIS Benchmark (1.1 - enable CloudTrail), NIST 800-53 (AU-2 - audit events)"
