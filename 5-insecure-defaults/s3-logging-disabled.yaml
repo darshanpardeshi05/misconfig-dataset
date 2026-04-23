@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: MISCONFIGURATION - S3 bucket access logging disabled (no audit trail of bucket access)
+Description: MISCONFIGURATION - S3 bucket access logging disabled
 
 Metadata:
   Misconfiguration:
@@ -7,26 +7,21 @@ Metadata:
     Severity: "MEDIUM"
     RuleId: "S3-008"
     Description: "S3 bucket does not have access logging enabled. No logs are captured for who accessed which objects, when, and from where."
-    Remediation: "Enable S3 server access logging to a dedicated logging bucket with proper permissions"
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Remediation: "Enable S3 server access logging to a dedicated logging bucket with proper permissions."
     Keywords:
       - "LoggingConfiguration"
       - "TargetBucket"
       - "TargetPrefix"
       - "Server access logging"
-    # LABEL FOR ML-BASED DETECTION
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION START: S3 bucket with access logging disabled
-  
-  # MISCONFIGURATION 1: Bucket with NO logging configuration
   UnloggedBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "unlogged-bucket-${AWS::AccountId}"
-      # MISCONFIGURATION: No LoggingConfiguration property
-      # Access logging is DISABLED by default
+      BucketName: !Sub "unlogged-bucket-${AWS::AccountId}-${AWS::StackName}"
+      # MISCONFIGURATION: No LoggingConfiguration property.
+      # Access logging is disabled by default.
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -34,161 +29,29 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: "Unlogged-Bucket"
+          Value: "Unlogged-S3-Bucket"
         - Key: Misconfiguration
-          Value: "S3-Logging-Disabled"
-
-  # MISCONFIGURATION 2: Bucket with explicit empty logging (disabled)
-  ExplicitlyDisabledLoggingBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "explicitly-disabled-logging-${AWS::AccountId}"
-      # MISCONFIGURATION: LoggingConfiguration with no target (effectively disabled)
-      LoggingConfiguration:
-        DestinationBucketName: ""
-        LogFilePrefix: ""
-      Tags:
-        - Key: Name
-          Value: "Explicitly-Disabled-Logging"
-        - Key: Misconfiguration
-          Value: "S3-Logging-Explicitly-Disabled"
-
-  # MISCONFIGURATION 3: Bucket with logging to wrong/non-existent bucket
-  InvalidLoggingBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "invalid-logging-bucket-${AWS::AccountId}"
-      # MISCONFIGURATION: Logging to bucket that doesn't exist
-      LoggingConfiguration:
-        DestinationBucketName: "this-bucket-does-not-exist"
-        LogFilePrefix: "logs/"
-      Tags:
-        - Key: Name
-          Value: "Invalid-Logging-Destination"
-        - Key: Misconfiguration
-          Value: "S3-Logging-Invalid-Destination"
-
-  # Example of CORRECT configuration (commented)
-  # CorrectLoggingBucket:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: !Sub "logging-bucket-${AWS::AccountId}"
-  #     AccessControl: LogDeliveryWrite
-  #     OwnershipControls:
-  #       Rules:
-  #         - ObjectOwnership: BucketOwnerPreferred
-  #
-  # CorrectBucketWithLogging:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: !Sub "logged-bucket-${AWS::AccountId}"
-  #     LoggingConfiguration:
-  #       DestinationBucketName: !Ref CorrectLoggingBucket
-  #       LogFilePrefix: "access-logs/"
+          Value: "S3-008"
+        - Key: Category
+          Value: "Insecure-Defaults"
+        - Key: Severity
+          Value: "MEDIUM"
+        - Key: Batch
+          Value: "Batch-8"
 
 Outputs:
-  UnloggedBucketName:
+  BucketName:
     Description: "S3 bucket with logging disabled"
     Value: !Ref UnloggedBucket
-  ExplicitlyDisabledBucketName:
-    Description: "S3 bucket with explicitly disabled logging"
-    Value: !Ref ExplicitlyDisabledLoggingBucket
-  RiskDescription:
-    Description: "Why disabled S3 logging is dangerous"
-    Value: |
-      With S3 access logging DISABLED:
-      
-      - NO record of who accessed which objects
-      - Cannot detect unauthorized access attempts
-      - No audit trail for compliance (PCI DSS, HIPAA, SOC 2)
-      - Cannot investigate data breaches
-      - No visibility into access patterns
-      - Cannot identify data exfiltration
-      
-      S3 server access logs provide:
-      - Requester (IAM user/role ARN)
-      - Bucket name and object key
-      - Request timestamp
-      - Action performed (GET, PUT, DELETE)
-      - HTTP status code
-      - Error codes (access denied)
-      - Bytes sent/received
-      - Source IP address
-      - User agent
-  WhatYouCannotSee:
-    Description: "Access information NOT being logged"
-    Value: |
-      - Who accessed your S3 objects (IAM user/role)
-      - When objects were accessed (timestamp)
-      - What action was performed (GET, PUT, DELETE)
-      - Where requests came from (source IP)
-      - What objects were accessed (bucket/key)
-      - How many bytes were transferred
-      - Which requests failed (access denied errors)
-      - What user agent was used
-  AttackScenario:
-    Description: "How attacker exploits disabled logging"
-    Value: |
-      Scenario 1 - Data Theft:
-      1. Attacker compromises IAM credentials
-      2. Attacker lists all S3 buckets
-      3. Attacker downloads all customer data (10TB)
-      4. Logging disabled → NO record of download
-      5. Data appears on dark web
-      6. Cannot investigate when or how breach occurred
-      
-      Scenario 2 - Insider Threat:
-      1. Malicious employee accesses sensitive S3 bucket
-      2. Downloads confidential documents
-      3. Logging disabled → no evidence
-      4. Employee leaves company with data
-      5. No forensic evidence for legal action
-      
-      Scenario 3 - Unauthorized Access Attempts:
-      1. Attacker attempts to access S3 bucket with wrong keys
-      2. Gets "Access Denied" errors
-      3. Logging disabled → failed attempts NOT recorded
-      4. Security team never knows someone tried to break in
+  Risk:
+    Description: "Security Risk"
+    Value: "No access logs means no audit trail for object requests. Cannot detect unauthorized access, data exfiltration, or troubleshoot access pattern issues."
   RemediationCommand:
-    Description: "Fix: Enable S3 access logging"
+    Description: "Fix: Enable server access logging to a dedicated logging bucket"
     Value: |
-      # Step 1: Create dedicated logging bucket
+      # Create dedicated logging bucket
       aws s3api create-bucket --bucket logging-bucket-<ACCOUNT_ID> --create-bucket-configuration LocationConstraint=<REGION>
-      
-      # Step 2: Grant Log Delivery group permission to write
-      aws s3api put-bucket-acl --bucket logging-bucket-<ACCOUNT_ID> --grant-write URI=http://acs.amazonaws.com/groups/s3/LogDelivery --grant-read-acp URI=http://acs.amazonaws.com/groups/s3/LogDelivery
-      
-      # Step 3: Enable logging on target bucket
-      aws s3api put-bucket-logging \
-        --bucket <BUCKET_TO_LOG> \
-        --bucket-logging-status '{
-          "LoggingEnabled": {
-            "TargetBucket": "logging-bucket-<ACCOUNT_ID>",
-            "TargetPrefix": "access-logs/"
-          }
-        }'
-      
-      # Step 4: Verify logging is enabled
-      aws s3api get-bucket-logging --bucket <BUCKET_TO_LOG>
-      
-      # Step 5: For multiple buckets, script the enablement
-      for bucket in $(aws s3api list-buckets --query 'Buckets[].Name' --output text); do
-        if [[ "$bucket" != "logging-bucket-<ACCOUNT_ID>" ]]; then
-          aws s3api put-bucket-logging --bucket $bucket --bucket-logging-status '{"LoggingEnabled":{"TargetBucket":"logging-bucket-<ACCOUNT_ID>","TargetPrefix":"logs/'$bucket'/"}}'
-        fi
-      done
-  EnableLoggingConsole:
-    Description: "Steps to enable in AWS Console"
-    Value: |
-      1. Open S3 Console
-      2. Select your bucket
-      3. Click "Properties" tab
-      4. Scroll to "Server access logging"
-      5. Click "Edit"
-      6. Select "Enable"
-      7. Choose target bucket (logging bucket)
-      8. Set prefix (e.g., logs/ or bucket-name/)
-      9. Click "Save changes"
-  ComplianceViolation:
-    Description: "Compliance frameworks requiring S3 logging"
-    Value: "CIS Benchmark (2.1.3 - enable S3 bucket logging), PCI DSS (Requirement 10 - log access), SOC 2 (CC7.2 - monitor systems), ISO 27001 (A.12.4 - logging)"
+      # Grant LogDelivery group write permission
+      aws s3api put-bucket-acl --bucket logging-bucket-<ACCOUNT_ID> --grant-write URI=http://acs.amazonaws.com/groups/s3/LogDelivery
+      # Enable logging on source bucket
+      aws s3api put-bucket-logging --bucket <SOURCE_BUCKET> --bucket-logging-status '{"LoggingEnabled":{"TargetBucket":"logging-bucket-<ACCOUNT_ID>","TargetPrefix":"access-logs/"}}'
