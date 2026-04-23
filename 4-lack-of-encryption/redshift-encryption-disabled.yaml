@@ -8,45 +8,65 @@ Metadata:
     RuleId: "REDSHIFT-001"
     Description: "Redshift cluster has encryption at rest disabled. All data in the data warehouse (customer data, financial records, analytics) is stored unencrypted."
     Remediation: "Enable encryption when creating Redshift clusters. Note: Encryption cannot be enabled on existing clusters without data migration."
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
     Keywords:
       - "Encrypted: false"
-      - "Encrypted: true"
-      - "KmsKeyId"
       - "Redshift encryption"
-    # LABEL FOR ML-BASED DETECTION
+      - "KmsKeyId"
+      - "StorageEncrypted"
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION START: Redshift cluster with encryption disabled
-  
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: "10.0.0.0/16"
+      CidrBlock: "10.0.14.0/16"
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
           Value: "Redshift-Encryption-VPC"
+        - Key: Batch
+          Value: "Batch-8"
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: "10.0.1.0/24"
+      CidrBlock: "10.0.14.0/24"
       AvailabilityZone: !Sub "${AWS::Region}a"
       MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: "Redshift-Private-Subnet-1"
+        - Key: Batch
+          Value: "Batch-8"
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: "10.0.2.0/24"
+      CidrBlock: "10.0.15.0/24"
       AvailabilityZone: !Sub "${AWS::Region}b"
       MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: "Redshift-Private-Subnet-2"
+        - Key: Batch
+          Value: "Batch-8"
 
-  # Security group for Redshift
+  RedshiftSubnetGroup:
+    Type: AWS::Redshift::ClusterSubnetGroup
+    Properties:
+      Description: "Redshift subnet group"
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: "Redshift-Subnet-Group"
+        - Key: Batch
+          Value: "Batch-8"
+
   RedshiftSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -57,164 +77,49 @@ Resources:
           FromPort: 5439
           ToPort: 5439
           CidrIp: "10.0.0.0/16"
+      Tags:
+        - Key: Name
+          Value: "Redshift-SG"
+        - Key: Batch
+          Value: "Batch-8"
 
-  # MISCONFIGURATION 1: Redshift cluster with encryption disabled (property omitted)
+  # MISCONFIGURATION: Encrypted property omitted (defaults to false)
   UnencryptedRedshiftCluster:
     Type: AWS::Redshift::Cluster
     Properties:
-      ClusterIdentifier: "unencrypted-redshift-cluster"
+      ClusterIdentifier: !Sub "unencrypted-redshift-${AWS::StackName}"
       DBName: "datawarehouse"
       MasterUsername: "admin"
       MasterUserPassword: "SecurePassword123!"
       NodeType: "dc2.large"
       ClusterType: "single-node"
-      # MISCONFIGURATION: Encrypted property is omitted (defaults to false)
-      # No KmsKeyId specified
+      # MISCONFIGURATION: No Encrypted: true (defaults to false)
       VpcSecurityGroupIds:
         - !Ref RedshiftSecurityGroup
       ClusterSubnetGroupName: !Ref RedshiftSubnetGroup
       PubliclyAccessible: false
       Tags:
         - Key: Name
-          Value: "Unencrypted-Redshift"
+          Value: "Unencrypted-Redshift-Cluster"
         - Key: Misconfiguration
-          Value: "Redshift-Encryption-Disabled"
-
-  # MISCONFIGURATION 2: Redshift cluster with explicit encryption disabled
-  ExplicitlyUnencryptedRedshift:
-    Type: AWS::Redshift::Cluster
-    Properties:
-      ClusterIdentifier: "explicitly-unencrypted-redshift"
-      DBName: "analytics"
-      MasterUsername: "analyst"
-      MasterUserPassword: "AnalystPassword123!"
-      NodeType: "dc2.large"
-      ClusterType: "single-node"
-      # MISCONFIGURATION: Explicitly setting Encrypted: false
-      Encrypted: false
-      VpcSecurityGroupIds:
-        - !Ref RedshiftSecurityGroup
-      ClusterSubnetGroupName: !Ref RedshiftSubnetGroup
-      PubliclyAccessible: false
-      Tags:
-        - Key: Name
-          Value: "Explicitly-Unencrypted-Redshift"
-        - Key: Misconfiguration
-          Value: "Redshift-Encryption-Disabled-Explicit"
-
-  # Subnet group for Redshift
-  RedshiftSubnetGroup:
-    Type: AWS::Redshift::ClusterSubnetGroup
-    Properties:
-      Description: "Redshift subnet group"
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-
-  # Example of CORRECT configuration with encryption (commented)
-  # EncryptedRedshiftCluster:
-  #   Type: AWS::Redshift::Cluster
-  #   Properties:
-  #     ClusterIdentifier: "encrypted-redshift-cluster"
-  #     DBName: "secure_datawarehouse"
-  #     MasterUsername: "admin"
-  #     MasterUserPassword: "SecurePassword123!"
-  #     NodeType: "dc2.large"
-  #     ClusterType: "single-node"
-  #     Encrypted: true
-  #     KmsKeyId: "alias/aws/redshift"  # AWS managed key
-  #     # OR use customer managed KMS key
-  #     # KmsKeyId: !GetAtt CustomerKMSKey.Arn
-  #     VpcSecurityGroupIds:
-  #       - !Ref RedshiftSecurityGroup
-  #     ClusterSubnetGroupName: !Ref RedshiftSubnetGroup
+          Value: "REDSHIFT-001"
+        - Key: Category
+          Value: "Lack-of-Encryption"
+        - Key: Severity
+          Value: "HIGH"
+        - Key: Batch
+          Value: "Batch-8"
 
 Outputs:
   ClusterIdentifier:
     Description: "Redshift cluster with encryption disabled"
     Value: !Ref UnencryptedRedshiftCluster
-  ClusterEndpoint:
-    Description: "Redshift cluster endpoint"
-    Value: !GetAtt UnencryptedRedshiftCluster.Endpoint.Address
-  ExplicitlyUnencryptedIdentifier:
-    Description: "Redshift cluster with explicit encryption disabled"
-    Value: !Ref ExplicitlyUnencryptedRedshift
-  RiskDescription:
-    Description: "Why this is dangerous"
-    Value: |
-      Redshift cluster data is stored UNENCRYPTED at rest:
-      - Customer data (PII, names, addresses, emails, phone numbers)
-      - Financial records (transactions, credit cards, bank accounts)
-      - Sales and revenue data
-      - Employee and HR data
-      - Business intelligence and analytics
-      - Backups and snapshots
-      
-      Data warehouse often contains the MOST SENSITIVE data in the organization:
-      - Aggregated customer information
-      - Historical financial transactions
-      - Predictive models and algorithms
-      - Compliance-related data
-      
-      With unencrypted Redshift, anyone with access to underlying storage can read ALL data.
-  AttackScenario:
-    Description: "How data can be exposed"
-    Value: |
-      Scenario 1 - Snapshot Access:
-      1. Attacker gains access to AWS account (compromised keys)
-      2. Attacker takes snapshot of unencrypted Redshift cluster
-      3. Attacker restores snapshot to new cluster
-      4. Attacker queries ALL data using SQL
-      5. Millions of customer records stolen in minutes
-      
-      Scenario 2 - Storage Access:
-      1. Attacker gains physical access to AWS storage hardware
-      2. Redshift data stored unencrypted on disk
-      3. Attacker reads all data warehouse contents
-      
-      Scenario 3 - Backup Exposure:
-      1. Automated backups of unencrypted cluster
-      2. Backup storage compromised
-      3. All historical data exposed
-  ImportantNote:
-    Description: "CRITICAL: Encryption cannot be enabled on existing Redshift clusters"
-    Value: |
-      Once a Redshift cluster is created without encryption, you CANNOT enable encryption on it.
-      
-      The ONLY way to encrypt the data is:
-      1. Create a new encrypted Redshift cluster
-      2. Unload data from old cluster to S3
-      3. COPY data from S3 to new encrypted cluster
-      4. Update all ETL pipelines and BI tools
-      5. Delete old unencrypted cluster
-      
-      This is a MAJOR migration effort requiring significant planning and downtime.
+  Risk:
+    Description: "Security Risk"
+    Value: "All data in Redshift (customer PII, financial records, analytics) is stored unencrypted at rest. Backups and snapshots also unencrypted. Compliance violation for PCI DSS, HIPAA."
   RemediationCommand:
-    Description: "Fix: Create new encrypted Redshift and migrate data"
+    Description: "Fix: Create new encrypted Redshift cluster and migrate data"
     Value: |
-      # Step 1: Create new encrypted Redshift cluster
-      aws redshift create-cluster \
-        --cluster-identifier encrypted-redshift \
-        --db-name datawarehouse \
-        --master-username admin \
-        --master-user-password NewSecurePassword123! \
-        --node-type dc2.large \
-        --cluster-type single-node \
-        --encrypted \
-        --kms-key-id alias/aws/redshift
-      
-      # Step 2: Unload data from old cluster to S3
-      # UNLOAD ('SELECT * FROM customers') TO 's3://bucket/unload/' AUTHORIZATION 'arn:aws:iam::account:role/RedshiftRole';
-      
-      # Step 3: COPY data from S3 to new encrypted cluster
-      # COPY customers FROM 's3://bucket/unload/customers_' AUTHORIZATION 'arn:aws:iam::account:role/RedshiftRole';
-      
-      # Step 4: Verify all data migrated
-      # Step 5: Update applications to use new cluster endpoint
-      # Step 6: Delete old unencrypted cluster
-      aws redshift delete-cluster \
-        --cluster-identifier unencrypted-redshift-cluster \
-        --skip-final-cluster-snapshot
-  ComplianceViolation:
-    Description: "Compliance frameworks requiring Redshift encryption"
-    Value: "PCI DSS (Requirement 3.4 - encrypt cardholder data), HIPAA (encrypt PHI at rest), GDPR (Article 32), SOC 2 (CC6.1), FedRAMP"
+      aws redshift create-cluster --cluster-identifier encrypted-redshift --db-name datawarehouse --master-username admin --master-user-password NewSecurePassword --node-type dc2.large --cluster-type single-node --encrypted --kms-key-id alias/aws/redshift
+      # Unload data from old cluster to S3, then COPY into new encrypted cluster
+      # Update applications, then delete old cluster
