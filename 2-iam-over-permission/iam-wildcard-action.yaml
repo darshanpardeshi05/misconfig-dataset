@@ -3,48 +3,55 @@ Description: MISCONFIGURATION - IAM policy with wildcard Action (*) allowing all
 
 Metadata:
   Misconfiguration:
-    Category: "IAM & Access Over-Permission"
+    Category: "IAM-OverPermission"
     Severity: "HIGH"
     RuleId: "IAM-001"
-    Description: "IAM policy allows ALL actions (*) which is overly permissive and violates least privilege principle"
-    Remediation: "Replace '*' with specific actions like s3:GetObject, ec2:DescribeInstances, etc."
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Description: "IAM policy allows ALL actions (*) which violates least privilege"
+    Remediation: "Restrict actions to only required services"
     Keywords:
-      - "Action: '*'"
-      - "Action: [*]"
-      - "Effect: Allow"
-      - "Principal:"
-    # LABEL FOR ML-BASED DETECTION
+      - "Action *"
+      - "iam wildcard action"
+      - "over permissive policy"
+      - "Effect Allow Resource *"
+      - "full access policy"
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION START: IAM User with overly permissive policy
+
   OverPermissiveUser:
     Type: AWS::IAM::User
     Properties:
-      UserName: "wildcard-action-user"
+      UserName: !Sub "wildcard-action-user-${AWS::StackName}"
       Tags:
+        - Key: Name
+          Value: "Wildcard-User"
         - Key: Misconfiguration
-          Value: "IAM-Wildcard-Action"
+          Value: "IAM-001"
+        - Key: Category
+          Value: "IAM-OverPermission"
+        - Key: Severity
+          Value: "HIGH"
+        - Key: Batch
+          Value: "Batch-2"
 
-  # MISCONFIGURATION: Policy with Action: "*"
   WildcardActionPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: "WildcardActionPolicy"
+      PolicyName: !Sub "WildcardActionPolicy-${AWS::StackName}"
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: "Allow"
-            # MISCONFIGURATION: This allows EVERY AWS action
+
+            # MISCONFIGURATION: Allows ALL actions
             Action: "*"
-            # MISCONFIGURATION: This allows access to EVERY resource
+
+            # MISCONFIGURATION: On ALL resources
             Resource: "*"
+
       Users:
         - !Ref OverPermissiveUser
-  # MISCONFIGURATION END
 
-  # Also creating an access key for this user (so it can be used)
   UserAccessKey:
     Type: AWS::IAM::AccessKey
     Properties:
@@ -52,14 +59,21 @@ Resources:
 
 Outputs:
   Username:
-    Description: "Name of over-permissive user"
+    Description: "Over-permissive IAM user"
     Value: !Ref OverPermissiveUser
+
   AccessKeyId:
-    Description: "Access Key ID (store securely for testing)"
+    Description: "Access Key ID"
     Value: !Ref UserAccessKey
+
   SecretAccessKey:
-    Description: "Secret Access Key (store securely for testing)"
+    Description: "Secret Access Key"
     Value: !GetAtt UserAccessKey.SecretAccessKey
-  RemediationCommand:
-    Description: "Fix: Delete the policy or replace with specific actions"
-    Value: !Sub "aws iam delete-user-policy --user-name wildcard-action-user --policy-name WildcardActionPolicy"
+
+  Risk:
+    Description: "Security Risk"
+    Value: "User can perform ANY action on ANY AWS resource."
+
+  FixCommand:
+    Description: "Remediation Command"
+    Value: !Sub "aws iam delete-user-policy --user-name ${OverPermissiveUser} --policy-name WildcardActionPolicy-${AWS::StackName}"
