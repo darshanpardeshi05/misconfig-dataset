@@ -3,51 +3,58 @@ Description: MISCONFIGURATION - IAM policy with wildcard Resource (*) allowing a
 
 Metadata:
   Misconfiguration:
-    Category: "IAM & Access Over-Permission"
+    Category: "IAM-OverPermission"
     Severity: "HIGH"
     RuleId: "IAM-002"
-    Description: "IAM policy allows access to ALL resources (*) which is overly permissive. User can access any resource of the allowed actions."
-    Remediation: "Replace '*' with specific resource ARNs like 'arn:aws:s3:::my-bucket/*'"
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Description: "IAM policy allows access to ALL resources (*) which is overly permissive"
+    Remediation: "Restrict Resource to specific ARNs"
     Keywords:
-      - "Resource: '*'"
-      - "Resource: [*]"
-      - "Resource: \"*\""
-    # LABEL FOR ML-BASED DETECTION
+      - "Resource *"
+      - "iam wildcard resource"
+      - "over permissive resource"
+      - "s3 all buckets access"
+      - "Resource star"
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION START: IAM User with resource-wildcard policy
+
   WildcardResourceUser:
     Type: AWS::IAM::User
     Properties:
-      UserName: "wildcard-resource-user"
+      UserName: !Sub "wildcard-resource-user-${AWS::StackName}"
       Tags:
+        - Key: Name
+          Value: "Wildcard-Resource-User"
         - Key: Misconfiguration
-          Value: "IAM-Wildcard-Resource"
+          Value: "IAM-002"
+        - Key: Category
+          Value: "IAM-OverPermission"
+        - Key: Severity
+          Value: "HIGH"
+        - Key: Batch
+          Value: "Batch-2"
 
-  # MISCONFIGURATION: Policy with Resource: "*" (but actions are specific)
-  # This is dangerous because user can perform allowed actions on ANY resource
   WildcardResourcePolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: "WildcardResourcePolicy"
+      PolicyName: !Sub "WildcardResourcePolicy-${AWS::StackName}"
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: "Allow"
-            # Actions are specific (S3 read only)
+
+            # Actions are limited (looks safe at first glance)
             Action:
               - "s3:GetObject"
               - "s3:ListBucket"
               - "s3:GetBucketLocation"
-            # MISCONFIGURATION: Resource wildcard - can access ANY S3 bucket
+
+            # MISCONFIGURATION: Applies to ALL resources
             Resource: "*"
+
       Users:
         - !Ref WildcardResourceUser
-  # MISCONFIGURATION END
 
-  # Create an access key for this user
   UserAccessKey:
     Type: AWS::IAM::AccessKey
     Properties:
@@ -55,17 +62,21 @@ Resources:
 
 Outputs:
   Username:
-    Description: "Name of user with resource-wildcard policy"
+    Description: "IAM user with wildcard resource access"
     Value: !Ref WildcardResourceUser
+
   AccessKeyId:
     Description: "Access Key ID"
     Value: !Ref UserAccessKey
+
   SecretAccessKey:
     Description: "Secret Access Key"
     Value: !GetAtt UserAccessKey.SecretAccessKey
-  WhatThisUserCanDo:
-    Description: "This user can read objects from ANY S3 bucket in the account"
-    Value: "s3:GetObject, s3:ListBucket on ALL buckets"
-  RemediationCommand:
-    Description: "Fix: Replace '*' with specific bucket ARN"
-    Value: !Sub "aws iam put-user-policy --user-name wildcard-resource-user --policy-name WildcardResourcePolicy --policy-document '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\",\"s3:ListBucket\"],\"Resource\":\"arn:aws:s3:::your-specific-bucket/*\"}]}'"
+
+  Risk:
+    Description: "Security Risk"
+    Value: "User can access data from ANY S3 bucket in the account."
+
+  FixCommand:
+    Description: "Remediation Command"
+    Value: !Sub "aws iam delete-user-policy --user-name ${WildcardResourceUser} --policy-name WildcardResourcePolicy-${AWS::StackName}"
