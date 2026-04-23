@@ -8,30 +8,71 @@ Metadata:
     RuleId: "RDS-002"
     Description: "RDS database has PubliclyAccessible=true, meaning it has a public IP address and is accessible from the internet. Databases should never be publicly accessible."
     Remediation: "Set PubliclyAccessible=false. Database should only be accessible from within VPC. Use bastion host or VPN if external access is needed."
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
     Keywords:
       - "PubliclyAccessible: true"
-      - "PubliclyAccessible: True"
-      - "publicly_accessible"
       - "RDS public"
       - "database public"
-    # LABEL FOR ML-BASED DETECTION
+      - "0.0.0.0/0"
+      - "port 3306"
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION START: RDS database with PubliclyAccessible = true
-  
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: "10.0.0.0/16"
+      CidrBlock: "10.0.8.0/16"
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: "RDS-Misconfig-VPC"
+          Value: "RDS-Public-VPC"
+        - Key: Misconfiguration
+          Value: "RDS-002"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-7"
 
-  # MISCONFIGURATION: Database security group allowing inbound access
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.8.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: "RDS-Public-Subnet-1"
+        - Key: Misconfiguration
+          Value: "RDS-002"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-7"
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.9.0/24"
+      AvailabilityZone: !Sub "${AWS::Region}b"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: "RDS-Public-Subnet-2"
+        - Key: Misconfiguration
+          Value: "RDS-002"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-7"
+
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -41,23 +82,26 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          CidrIp: "0.0.0.0/0"      # MISCONFIGURATION: MySQL open to world
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          CidrIp: "0.0.0.0/0"      # MISCONFIGURATION: PostgreSQL open to world
+          CidrIp: "0.0.0.0/0"
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: "0.0.0.0/0"
       Tags:
+        - Key: Name
+          Value: "RDS-Public-SG"
         - Key: Misconfiguration
-          Value: "RDS-Public-Access"
+          Value: "RDS-002"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-7"
 
-  # MISCONFIGURATION: MySQL RDS instance with PubliclyAccessible = true
   PublicMySQLDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: "public-mysql-db"
+      DBInstanceIdentifier: !Sub "public-mysql-db-${AWS::StackName}"
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: "8.0"
@@ -65,30 +109,6 @@ Resources:
       MasterUserPassword: "WeakPassword123!"
       AllocatedStorage: 20
       StorageEncrypted: false
-      # MISCONFIGURATION: Publicly accessible = true (the main issue)
-      PubliclyAccessible: true
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
-      DBSubnetGroupName: !Ref PublicDBSubnetGroup
-      BackupRetentionPeriod: 0      # MISCONFIGURATION: No backups
-      DeletionProtection: false
-      Tags:
-        - Key: Misconfiguration
-          Value: "RDS-Publicly-Accessible-MySQL"
-
-  # MISCONFIGURATION: PostgreSQL RDS instance with PubliclyAccessible = true
-  PublicPostgresDatabase:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceIdentifier: "public-postgres-db"
-      DBInstanceClass: db.t3.micro
-      Engine: postgres
-      EngineVersion: "15"
-      MasterUsername: "postgres"
-      MasterUserPassword: "WeakPassword123!"
-      AllocatedStorage: 20
-      StorageEncrypted: false
-      # MISCONFIGURATION: Publicly accessible = true
       PubliclyAccessible: true
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
@@ -96,10 +116,17 @@ Resources:
       BackupRetentionPeriod: 0
       DeletionProtection: false
       Tags:
+        - Key: Name
+          Value: "Public-MySQL-DB"
         - Key: Misconfiguration
-          Value: "RDS-Publicly-Accessible-PostgreSQL"
+          Value: "RDS-002"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-7"
 
-  # Public subnet group (RDS needs at least 2 subnets)
   PublicDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -108,25 +135,13 @@ Resources:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
 
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: "10.0.1.0/24"
-      AvailabilityZone: !Sub "${AWS::Region}a"
-      MapPublicIpOnLaunch: true
-
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: "10.0.2.0/24"
-      AvailabilityZone: !Sub "${AWS::Region}b"
-      MapPublicIpOnLaunch: true
-
-  # Internet Gateway for public access
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+    Tags:
+      - Key: Name
+        Value: "RDS-Public-IGW"
+      - Key: Batch
+        Value: "Batch-7"
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -138,6 +153,11 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: "RDS-Public-RT"
+        - Key: Batch
+          Value: "Batch-7"
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -160,49 +180,12 @@ Resources:
       RouteTableId: !Ref RouteTable
 
 Outputs:
-  MySQLDatabaseEndpoint:
+  DatabaseEndpoint:
     Description: "Publicly accessible MySQL database endpoint"
     Value: !GetAtt PublicMySQLDatabase.Endpoint.Address
-  MySQLDatabasePort:
-    Description: "MySQL port (3306)"
-    Value: !GetAtt PublicMySQLDatabase.Endpoint.Port
-  PostgresDatabaseEndpoint:
-    Description: "Publicly accessible PostgreSQL database endpoint"
-    Value: !GetAtt PublicPostgresDatabase.Endpoint.Address
-  PostgresDatabasePort:
-    Description: "PostgreSQL port (5432)"
-    Value: !GetAtt PublicPostgresDatabase.Endpoint.Port
-  RiskDescription:
-    Description: "Why this is CRITICAL"
-    Value: |
-      Database has a PUBLIC IP address and is accessible from anywhere on internet.
-      - Attacker can attempt to connect directly to database
-      - Brute force attacks on database credentials
-      - Exploit known database vulnerabilities
-      - Data theft, data deletion, ransomware
-  AttackScenario:
-    Description: "How attacker exploits this"
-    Value: |
-      1. Attacker scans AWS IP ranges for open port 3306/5432
-      2. Attacker finds your RDS endpoint
-      3. Attacker attempts to connect using MySQL/PostgreSQL client
-      4. Attacker brute forces weak password (admin/WeakPassword123!)
-      5. Attacker gains access to ALL database data
-      6. Attacker dumps customer records, financial data, credentials
-      7. Attacker may delete or ransom the data
+  Risk:
+    Description: "Security Risk"
+    Value: "Database has a PUBLIC IP address and is accessible from anywhere on internet. Attacker can attempt to connect, brute force credentials, and steal all data."
   RemediationCommand:
-    Description: "Fix: Disable public accessibility"
-    Value: |
-      # Make database private
-      aws rds modify-db-instance --db-instance-identifier public-mysql-db --no-publicly-accessible
-      aws rds modify-db-instance --db-instance-identifier public-postgres-db --no-publicly-accessible
-      
-      # Also revoke security group rules
-      aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 3306 --cidr 0.0.0.0/0
-      aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 5432 --cidr 0.0.0.0/0
-  ConnectionTestCommand:
-    Description: "Test if database is publicly accessible (run from any internet connection)"
-    Value: "mysql -h <DB_ENDPOINT> -P 3306 -u admin -p"
-  ComplianceImpact:
-    Description: "Compliance violations"
-    Value: "PCI DSS (Requirement 1.3.2), HIPAA, GDPR, SOC 2 all prohibit publicly accessible databases"
+    Description: "Fix: Disable public accessibility and restrict security group"
+    Value: !Sub "aws rds modify-db-instance --db-instance-identifier ${PublicMySQLDatabase} --no-publicly-accessible && aws ec2 revoke-security-group-ingress --group-id ${DatabaseSecurityGroup} --protocol tcp --port 3306 --cidr 0.0.0.0/0"
