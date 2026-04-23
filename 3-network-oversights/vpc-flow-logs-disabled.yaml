@@ -8,94 +8,59 @@ Metadata:
     RuleId: "VPC-001"
     Description: "VPC Flow Logs are disabled. No network traffic logs are captured, making it impossible to detect unauthorized access, data exfiltration, or network attacks."
     Remediation: "Enable VPC Flow Logs for all VPCs and subnets. Send logs to CloudWatch Logs or S3 for analysis."
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
     Keywords:
       - "FlowLog"
       - "VPCFlowLogs"
       - "FlowLogsDisabled"
+      - "No Flow Logs"
       - "vpc-flow-logs"
-      - "FlowLogResourceId"
-    # LABEL FOR ML-BASED DETECTION
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION START: VPC WITHOUT Flow Logs enabled
-  
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: "10.0.0.0/16"
+      CidrBlock: "10.0.7.0/16"
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: "VPC-With-No-Flow-Logs"
+          Value: "VPC-No-Flow-Logs"
         - Key: Misconfiguration
-          Value: "VPC-Flow-Logs-Disabled"
-
-  # MISCONFIGURATION NOTE: No FlowLog resource is defined
-  # A properly configured VPC would have:
-  # FlowLog:
-  #   Type: AWS::EC2::FlowLog
-  #   Properties:
-  #     ResourceId: !Ref VPC
-  #     ResourceType: VPC
-  #     TrafficType: ALL
-  #     LogDestinationType: cloud-watch-logs
-  #     LogDestination: !GetAtt FlowLogLogGroup.Arn
+          Value: "VPC-001"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "MEDIUM"
+        - Key: Batch
+          Value: "Batch-6"
 
   PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: "10.0.1.0/24"
+      CidrBlock: "10.0.7.0/24"
       AvailabilityZone: !Sub "${AWS::Region}a"
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: "Public-Subnet-No-Logs"
+        - Key: Misconfiguration
+          Value: "VPC-001"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "MEDIUM"
+        - Key: Batch
+          Value: "Batch-6"
 
-  PrivateSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: "10.0.2.0/24"
-      AvailabilityZone: !Sub "${AWS::Region}b"
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: "Private-Subnet-No-Logs"
-
-  # EC2 instance to demonstrate traffic (but no logs)
-  SampleInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: t2.micro
-      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
-      SubnetId: !Ref PublicSubnet
-      SecurityGroupIds:
-        - !Ref SampleSecurityGroup
-      Tags:
-        - Key: Name
-          Value: "Sample-Instance-No-Logs"
-
-  SampleSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: "Sample security group"
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: "0.0.0.0/0"
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: "0.0.0.0/0"
-
-  # Internet Gateway for public access
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+    Tags:
+      - Key: Name
+        Value: "IGW-No-Logs"
+      - Key: Batch
+        Value: "Batch-6"
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -107,6 +72,11 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: "Public-RT-No-Logs"
+        - Key: Batch
+          Value: "Batch-6"
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -122,73 +92,17 @@ Resources:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref RouteTable
 
-# Mapping for AMI IDs per region
-Mappings:
-  AWSRegionArch2AMI:
-    us-east-1:
-      AMI: ami-0c02fb55956c7d316
-    us-west-2:
-      AMI: ami-0d70546e43a328d54
-    eu-west-1:
-      AMI: ami-07470b0ad10cbe60e
+  # =========================================================
+  # MISCONFIGURATION: No Flow Logs resource is defined
+  # =========================================================
 
 Outputs:
   VPCId:
     Description: "VPC ID with Flow Logs disabled"
     Value: !Ref VPC
-  VpcCidr:
-    Description: "VPC CIDR block"
-    Value: !GetAtt VPC.CidrBlock
-  RiskDescription:
-    Description: "Why this is dangerous"
-    Value: |
-      Without VPC Flow Logs:
-      - Cannot detect unauthorized access attempts
-      - Cannot identify data exfiltration
-      - No evidence of network-based attacks
-      - Compliance violations (PCI DSS, HIPAA require logging)
-      - Cannot troubleshoot network connectivity issues
-  WhatYouAreMissing:
-    Description: "Information NOT being captured"
-    Value: |
-      - Source IP addresses connecting to your resources
-      - Destination IP addresses your resources connect to
-      - Ports being used for communication
-      - Packet counts and byte transfer amounts
-      - Connection start and end times
-      - Rejected connections (attack attempts)
-      - Traffic patterns indicating data theft
-  AttackScenario:
-    Description: "What attacker can do without detection"
-    Value: |
-      1. Attacker scans and finds open port on your instance
-      2. Attacker brute forces SSH and gains access
-      3. Attacker downloads 100GB of customer data
-      4. NO LOGS are captured because Flow Logs are disabled
-      5. Security team has NO visibility of the attack
-      6. Breach is discovered weeks later by customer complaint
+  Risk:
+    Description: "Security Risk"
+    Value: "Without VPC Flow Logs, you cannot detect unauthorized access attempts, identify data exfiltration, or investigate network-based attacks."
   RemediationCommand:
     Description: "Fix: Enable VPC Flow Logs"
-    Value: |
-      # Create IAM role for Flow Logs
-      # Then enable Flow Logs
-      aws ec2 create-flow-logs \
-        --resource-ids <VPC_ID> \
-        --resource-type VPC \
-        --traffic-type ALL \
-        --log-destination-type cloud-watch-logs \
-        --log-group-name vpc-flow-logs \
-        --deliver-logs-permission-arn arn:aws:iam::<ACCOUNT_ID>:role/FlowLogsRole
-  EnableFlowLogsConsole:
-    Description: "Steps to enable in AWS Console"
-    Value: |
-      1. Go to VPC Dashboard
-      2. Select Your VPC
-      3. Click "Flow Logs" tab
-      4. Click "Create flow log"
-      5. Filter: ALL
-      6. Destination: CloudWatch Logs
-      7. Click "Create"
-  ComplianceImpact:
-    Description: "Compliance frameworks requiring flow logs"
-    Value: "PCI DSS (Requirement 10), HIPAA (164.312(b)), SOC 2, NIST 800-53, CIS Benchmark 3.3"
+    Value: !Sub "aws ec2 create-flow-logs --resource-ids ${VPC} --resource-type VPC --traffic-type ALL --log-destination-type cloud-watch-logs --log-group-name vpc-flow-logs --deliver-logs-permission-arn arn:aws:iam::${AWS::AccountId}:role/FlowLogsRole"
