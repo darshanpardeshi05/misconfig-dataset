@@ -1,14 +1,13 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: MISCONFIGURATION - Security group allows ALL ports (-1) from 0.0.0.0/0 (complete network exposure)
+Description: MISCONFIGURATION - Security group allows ALL ports (-1) from 0.0.0.0/0
 
 Metadata:
   Misconfiguration:
     Category: "Network Oversights"
     Severity: "CRITICAL"
     RuleId: "SG-007"
-    Description: "Security group allows ALL TCP ports from entire internet (0.0.0.0/0). This is the worst possible network misconfiguration - completely exposes all resources."
+    Description: "Security group allows ALL traffic from entire internet (0.0.0.0/0). This is the worst possible network misconfiguration - completely exposes all resources."
     Remediation: "IMMEDIATELY remove this rule. Security groups should only allow specific ports needed for application functionality."
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
     Keywords:
       - "-1"
       - "0.0.0.0/0"
@@ -17,105 +16,91 @@ Metadata:
       - "ToPort: -1"
       - "all ports"
       - "all traffic"
-    # LABEL FOR ML-BASED DETECTION
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION START: Security group with ALL ports open to entire internet
-  
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: "10.0.0.0/16"
+      CidrBlock: "10.0.6.0/16"
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: "Network-Misconfig-VPC"
-
-  # MISCONFIGURATION: Security group allowing ALL ports from anywhere
-  AllPortsOpenSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: "MISCONFIGURATION - ALL ports open to world"
-      VpcId: !Ref VPC
-      # MISCONFIGURATION START: ALL ports (-1) open to 0.0.0.0/0
-      SecurityGroupIngress:
-        - IpProtocol: "-1"
-          CidrIp: "0.0.0.0/0"      # MISCONFIGURATION: Any protocol, any port
-        - IpProtocol: "-1"
-          CidrIpv6: "::/0"         # MISCONFIGURATION: IPv6 also open
-      # MISCONFIGURATION END
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: "0.0.0.0/0"
-      Tags:
+          Value: "AllPorts-Misconfig-VPC"
         - Key: Misconfiguration
-          Value: "SG-All-Ports-Open-CRITICAL"
+          Value: "SG-007"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-5"
 
   PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: "10.0.1.0/24"
+      CidrBlock: "10.0.6.0/24"
       AvailabilityZone: !Sub "${AWS::Region}a"
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: "Public-Subnet"
+          Value: "AllPorts-Public-Subnet"
+        - Key: Misconfiguration
+          Value: "SG-007"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-5"
 
-  # EC2 instance with ALL ports open
+  AllPortsOpenSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "MISCONFIGURATION - ALL ports open to world"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: "-1"
+          CidrIp: "0.0.0.0/0"
+        - IpProtocol: "-1"
+          CidrIpv6: "::/0"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Name
+          Value: "AllPorts-Open-SG"
+        - Key: Misconfiguration
+          Value: "SG-007"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-5"
+
   FullyExposedEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
-      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", AMI]
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
         - !Ref AllPortsOpenSecurityGroup
-      KeyName: "test-key"
       Tags:
         - Key: Name
           Value: "Fully-Exposed-Instance"
         - Key: Misconfiguration
-          Value: "All-Ports-Open-CRITICAL"
+          Value: "SG-007"
+        - Key: Category
+          Value: "Network-Oversights"
+        - Key: Severity
+          Value: "CRITICAL"
+        - Key: Batch
+          Value: "Batch-5"
 
-  # RDS database with ALL ports open (extremely dangerous)
-  ExposedDatabase:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceIdentifier: "fully-exposed-db"
-      DBInstanceClass: db.t3.micro
-      Engine: mysql
-      EngineVersion: "8.0"
-      MasterUsername: "admin"
-      MasterUserPassword: "WeakPassword123!"
-      AllocatedStorage: 20
-      PubliclyAccessible: true
-      VPCSecurityGroups:
-        - !Ref AllPortsOpenSecurityGroup
-      DBSubnetGroupName: !Ref PublicDBSubnetGroup
-      Tags:
-        - Key: Misconfiguration
-          Value: "Database-All-Ports-Open"
-
-  PublicDBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: "Public subnet group"
-      SubnetIds:
-        - !Ref PublicSubnet
-        - !Ref PublicSubnet2
-
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: "10.0.2.0/24"
-      AvailabilityZone: !Sub "${AWS::Region}b"
-      MapPublicIpOnLaunch: true
-
-  # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
 
@@ -138,19 +123,12 @@ Resources:
       DestinationCidrBlock: "0.0.0.0/0"
       GatewayId: !Ref InternetGateway
 
-  SubnetRouteAssociation1:
+  SubnetRouteAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref RouteTable
 
-  SubnetRouteAssociation2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref RouteTable
-
-# Mapping for AMI IDs per region
 Mappings:
   AWSRegionArch2AMI:
     us-east-1:
@@ -164,40 +142,12 @@ Outputs:
   SecurityGroupId:
     Description: "Security group ID with ALL ports open to world (CRITICAL)"
     Value: !Ref AllPortsOpenSecurityGroup
-  ExposedInstanceId:
+  InstanceId:
     Description: "EC2 instance with all ports open"
     Value: !Ref FullyExposedEC2Instance
-  ExposedInstancePublicIp:
-    Description: "Public IP of exposed instance"
-    Value: !GetAtt FullyExposedEC2Instance.PublicIp
-  ExposedDatabaseEndpoint:
-    Description: "Database endpoint with all ports open"
-    Value: !GetAtt ExposedDatabase.Endpoint.Address
-  RiskDescription:
-    Description: "Why this is the WORST possible misconfiguration"
-    Value: |
-      ALL 65,535 TCP ports are open to the ENTIRE INTERNET.
-      This means:
-      - SSH (22) - anyone can try to log in
-      - RDP (3389) - anyone can try Windows access
-      - MySQL (3306) - anyone can access database
-      - PostgreSQL (5432) - anyone can access database
-      - Redis (6379) - anyone can access (no auth)
-      - MongoDB (27017) - anyone can access (no auth)
-      - AND EVERY OTHER PORT - any service running is exposed
-  AttackScenario:
-    Description: "How attacker exploits this"
-    Value: |
-      1. Attacker scans for any AWS IP with all ports open
-      2. Attacker runs full port scan on your instance
-      3. Attacker discovers EVERY service running on your instance
-      4. Attacker finds vulnerable service (old version, default password, no auth)
-      5. Attacker exploits that service
-      6. Attacker gains complete control of the instance
-      7. Attacker pivots to attack other resources in your VPC
+  Risk:
+    Description: "Security Risk"
+    Value: "ALL ports (1-65535) are open to the internet. Any service running on this instance is exposed."
   RemediationCommand:
     Description: "URGENT FIX: Delete this security group rule immediately"
-    Value: "aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol -1 --cidr 0.0.0.0/0"
-  WhatPortsAreOpen:
-    Description: "Every single port (1-65535) is open"
-    Value: "SSH(22), Telnet(23), SMTP(25), DNS(53), HTTP(80), HTTPS(443), RDP(3389), MySQL(3306), PostgreSQL(5432), Redis(6379), MongoDB(27017), and 65,000+ more"
+    Value: !Sub "aws ec2 revoke-security-group-ingress --group-id ${AllPortsOpenSecurityGroup} --protocol -1 --cidr 0.0.0.0/0"
