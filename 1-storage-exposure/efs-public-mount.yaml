@@ -1,17 +1,24 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: MISCONFIGURATION - EFS file system with public mount target (accessible from outside VPC)
+Description: MISCONFIGURATION - EFS file system with public mount target
 
 # METADATA - For research tracking and automated detection
 Metadata:
   Misconfiguration:
-    Category: "Storage Exposure"
+    Category: "Storage-Exposure"
     Severity: "HIGH"
     RuleId: "EFS-001"
-    Description: "EFS file system has mount targets in public subnets with security group allowing NFS from anywhere"
-    Remediation: "Move mount targets to private subnets and restrict security group to specific VPC CIDR"
+    Description: "EFS file system has mount target in public subnet with security group allowing NFS from anywhere"
+    Remediation: "Move mount target to private subnet and restrict NFS access"
+    Keywords:
+      - "EFS public"
+      - "NFS 2049 open"
+      - "mount target public"
+      - "0.0.0.0/0"
+      - "unencrypted EFS"
+    ML_Label: "misconfiguration"
 
 Resources:
-  # VPC with public and private subnets
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -20,9 +27,16 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: "EFS-Misconfig-VPC"
+          Value: "EFS-VPC"
+        - Key: Misconfiguration
+          Value: "EFS-001"
+        - Key: Category
+          Value: "Storage-Exposure"
+        - Key: Severity
+          Value: "HIGH"
+        - Key: Batch
+          Value: "Batch-1"
 
-  # MISCONFIGURATION START: Public subnet where EFS mount target will be created
   PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -32,9 +46,16 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: "Public-Subnet-For-EFS"
+          Value: "EFS-Public-Subnet"
+        - Key: Misconfiguration
+          Value: "EFS-001"
+        - Key: Category
+          Value: "Storage-Exposure"
+        - Key: Severity
+          Value: "HIGH"
+        - Key: Batch
+          Value: "Batch-1"
 
-  # Internet Gateway for public access
   InternetGateway:
     Type: AWS::EC2::InternetGateway
 
@@ -44,8 +65,7 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  # Route table for public subnet
-  PublicRouteTable:
+  RouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
@@ -54,84 +74,103 @@ Resources:
     Type: AWS::EC2::Route
     DependsOn: InternetGateway
     Properties:
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref RouteTable
       DestinationCidrBlock: "0.0.0.0/0"
       GatewayId: !Ref InternetGateway
 
-  PublicSubnetRouteAssociation:
+  SubnetRouteAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref RouteTable
 
-  # MISCONFIGURATION: Security group allowing NFS (port 2049) from ANYWHERE
-  EFSMisconfigSecurityGroup:
+  EFSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "MISCONFIGURATION - Allows NFS access from anywhere"
+      GroupDescription: "MISCONFIGURATION - NFS open to world"
       VpcId: !Ref VPC
-      # MISCONFIGURATION START: NFS port open to entire internet
+
+      # MISCONFIGURATION: NFS open to internet
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 2049
           ToPort: 2049
-          CidrIp: "0.0.0.0/0"      # MISCONFIGURATION: Anyone can connect
+          CidrIp: "0.0.0.0/0"
         - IpProtocol: tcp
           FromPort: 2049
           ToPort: 2049
-          CidrIpv6: "::/0"         # MISCONFIGURATION: IPv6 also open
-      # MISCONFIGURATION END
+          CidrIpv6: "::/0"
+
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: "0.0.0.0/0"
+
       Tags:
         - Key: Name
-          Value: "EFS-Public-SecurityGroup"
+          Value: "EFS-SG"
+        - Key: Misconfiguration
+          Value: "EFS-001"
+        - Key: Category
+          Value: "Storage-Exposure"
+        - Key: Severity
+          Value: "HIGH"
+        - Key: Batch
+          Value: "Batch-1"
 
-  # EFS File System
   EFSFileSystem:
     Type: AWS::EFS::FileSystem
     Properties:
       PerformanceMode: generalPurpose
       ThroughputMode: bursting
-      Encrypted: false              # MISCONFIGURATION: Encryption at rest disabled
-      LifecyclePolicies:
-        - TransitionToIA: AFTER_30_DAYS
+      Encrypted: false   # MISCONFIGURATION
       Tags:
         - Key: Name
-          Value: "Public-EFS-Misconfig"
+          Value: "EFS-Public"
+        - Key: Misconfiguration
+          Value: "EFS-001"
+        - Key: Category
+          Value: "Storage-Exposure"
+        - Key: Severity
+          Value: "HIGH"
+        - Key: Batch
+          Value: "Batch-1"
 
-  # MISCONFIGURATION START: Mount target in PUBLIC subnet
   EFSMountTarget:
     Type: AWS::EFS::MountTarget
     Properties:
       FileSystemId: !Ref EFSFileSystem
-      SubnetId: !Ref PublicSubnet   # MISCONFIGURATION: Should be in private subnet
+      SubnetId: !Ref PublicSubnet   # MISCONFIGURATION
       SecurityGroups:
-        - !Ref EFSMisconfigSecurityGroup
-  # MISCONFIGURATION END
+        - !Ref EFSSecurityGroup
 
-  # Test EC2 instance to demonstrate mounting (optional)
   TestInstance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
-      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", "AMI"]
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", AMI]
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
-        - !Ref EFSMisconfigSecurityGroup
+        - !Ref EFSSecurityGroup
+
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
           yum install -y amazon-efs-utils
           mkdir /mnt/efs
           mount -t efs ${EFSFileSystem}:/ /mnt/efs
-          echo "EFS mounted from public subnet"
+
       Tags:
         - Key: Name
-          Value: "EFS-Test-Client"
+          Value: "EFS-Test-Instance"
+        - Key: Misconfiguration
+          Value: "EFS-001"
+        - Key: Category
+          Value: "Storage-Exposure"
+        - Key: Severity
+          Value: "HIGH"
+        - Key: Batch
+          Value: "Batch-1"
 
-# Mapping for AMI IDs per region
 Mappings:
   AWSRegionArch2AMI:
     us-east-1:
@@ -142,15 +181,23 @@ Mappings:
       AMI: ami-07470b0ad10cbe60e
 
 Outputs:
-  EFSFileSystemId:
-    Description: "EFS File System ID (publicly accessible)"
+  FileSystemId:
+    Description: "EFS File System ID"
     Value: !Ref EFSFileSystem
-  MountTargetId:
-    Description: "Mount target in public subnet (MISCONFIGURATION)"
+
+  MountTarget:
+    Description: "Public mount target"
     Value: !Ref EFSMountTarget
-  MountCommand:
-    Description: "Command to mount this EFS from ANY EC2 instance"
-    Value: !Sub "sudo mount -t efs ${EFSFileSystem}:/ /mnt/efs"
-  RemediationCommand:
-    Description: "Fix: Delete mount target from public subnet and create in private subnet"
-    Value: "aws efs delete-mount-target --mount-target-id <MT_ID> && aws efs create-mount-target --file-system-id <FS_ID> --subnet-id <PRIVATE_SUBNET> --security-group-ids <SG_ID>"
+
+  Risk:
+    Description: "Security Risk"
+    Value: "EFS can be accessed from anywhere over NFS, exposing sensitive files."
+
+  FixCommand:
+    Description: "Remediation Command"
+    Value: |
+      aws ec2 revoke-security-group-ingress \
+        --group-id <SG_ID> \
+        --protocol tcp \
+        --port 2049 \
+        --cidr 0.0.0.0/0
