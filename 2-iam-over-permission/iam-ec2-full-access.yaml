@@ -3,53 +3,61 @@ Description: MISCONFIGURATION - IAM user with inline ec2:* access (full EC2 perm
 
 Metadata:
   Misconfiguration:
+    Id: "MISCONFIG-016"
+    Batch: "Batch-4"
     Category: "IAM & Access Over-Permission"
     Severity: "HIGH"
     RuleId: "IAM-006"
+    Service: "IAM"
+    ResourceType: "AWS::IAM::User"
     Description: "IAM user has ec2:* permission - can perform ANY EC2 action on ANY EC2 resource in the account"
-    Remediation: "Replace ec2:* with specific actions like ec2:DescribeInstances, ec2:StartInstances, and restrict to specific instance IDs or tags"
-    # KEYWORDS FOR KEYWORD-BASED DETECTION
+    Impact: "User can launch, terminate, modify instances, security groups, AMIs, and volumes across the account"
+    Remediation: "Replace ec2:* with least privilege actions and restrict to specific resources"
+
     Keywords:
       - "ec2:*"
       - "Action: ec2:*"
-      - "Action: 'ec2:*'"
+      - "Resource: *"
       - "ec2:RunInstances"
       - "ec2:TerminateInstances"
-      - "ec2:StartInstances"
-      - "ec2:StopInstances"
-      - "ec2:CreateSecurityGroup"
-      - "ec2:AuthorizeSecurityGroupIngress"
-    # LABEL FOR ML-BASED DETECTION
+
     ML_Label: "misconfiguration"
 
 Resources:
-  # MISCONFIGURATION START: IAM User with full EC2 access
+
   EC2FullAccessUser:
     Type: AWS::IAM::User
     Properties:
-      UserName: "ec2-full-access-user"
+      UserName: !Sub "ec2-full-access-user-${AWS::StackName}"
       Tags:
+        - Key: Name
+          Value: "EC2-Full-Access-User"
         - Key: Misconfiguration
           Value: "IAM-EC2-Full-Access"
+        - Key: MisconfigId
+          Value: "MISCONFIG-016"
+        - Key: Batch
+          Value: "Batch-4"
+        - Key: Category
+          Value: "IAM-OverPermission"
+        - Key: Severity
+          Value: "HIGH"
+        - Key: ToolDetection
+          Value: "Prowler,ScoutSuite,Custodian"
 
-  # MISCONFIGURATION: Inline policy with ec2:* access
   EC2FullAccessPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: "EC2FullAccessPolicy"
+      PolicyName: !Sub "EC2FullAccessPolicy-${AWS::StackName}"
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: "Allow"
-            # MISCONFIGURATION: ec2:* means ALL EC2 actions
-            Action: "ec2:*"
-            # MISCONFIGURATION: Resource wildcard means ALL EC2 resources
-            Resource: "*"
+            Action: "ec2:*"   # MISCONFIGURATION
+            Resource: "*"     # MISCONFIGURATION
       Users:
         - !Ref EC2FullAccessUser
-  # MISCONFIGURATION END
 
-  # Create an access key for this user
   UserAccessKey:
     Type: AWS::IAM::AccessKey
     Properties:
@@ -57,28 +65,17 @@ Resources:
 
 Outputs:
   Username:
-    Description: "Name of user with full EC2 access"
+    Description: "IAM user with full EC2 access"
     Value: !Ref EC2FullAccessUser
-  AccessKeyId:
-    Description: "Access Key ID"
-    Value: !Ref UserAccessKey
-  SecretAccessKey:
-    Description: "Secret Access Key"
-    Value: !GetAtt UserAccessKey.SecretAccessKey
-  WhatThisUserCanDo:
-    Description: "This user can perform ANY EC2 action on ANY EC2 resource"
-    Value: "Launch, Stop, Terminate, Modify ALL EC2 instances, security groups, AMIs, snapshots, volumes"
-  SpecificActionsUserCanDo:
-    Description: "Examples of what this user can do"
-    Value: |
-      - Launch new instances: aws ec2 run-instances
-      - Stop any instance: aws ec2 stop-instances --instance-ids i-xxxxx
-      - Terminate any instance: aws ec2 terminate-instances --instance-ids i-xxxxx
-      - Create security groups: aws ec2 create-security-group
-      - Open SSH to world: aws ec2 authorize-security-group-ingress --protocol tcp --port 22 --cidr 0.0.0.0/0
-      - Create AMIs: aws ec2 create-image
-      - Create/modify EBS volumes: aws ec2 create-volume
-      - Modify instance types: aws ec2 modify-instance-attribute --instance-type
-  RemediationCommand:
-    Description: "Fix: Delete this policy"
-    Value: !Sub "aws iam delete-user-policy --user-name ec2-full-access-user --policy-name EC2FullAccessPolicy"
+
+  MisconfigId:
+    Description: "Unique Misconfiguration ID"
+    Value: "MISCONFIG-016"
+
+  RiskLevel:
+    Description: "Risk Severity"
+    Value: "HIGH"
+
+  Remediation:
+    Description: "Fix: Restrict EC2 permissions"
+    Value: "Replace ec2:* with least privilege actions and restrict to specific resources"
