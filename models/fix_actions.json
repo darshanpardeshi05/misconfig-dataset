@@ -1,0 +1,203 @@
+{
+  "S3": {
+    "public_read_acl": {
+      "backup": ["bucket_policy", "public_access_block", "bucket_acl", "encryption"],
+      "deploy": "put_public_access_block",
+      "deploy_params": {"BlockPublicAcls": true, "IgnorePublicAcls": true, "BlockPublicPolicy": true, "RestrictPublicBuckets": true},
+      "verify": "check_public_access_block",
+      "rollback": "restore_public_access_block"
+    },
+    "bucket_policy_public": {
+      "backup": ["bucket_policy"],
+      "deploy": "delete_bucket_policy",
+      "verify": "check_no_bucket_policy",
+      "rollback": "restore_bucket_policy"
+    },
+    "encryption_disabled": {
+      "backup": ["encryption"],
+      "deploy": "put_bucket_encryption",
+      "deploy_params": {"SSEAlgorithm": "AES256"},
+      "verify": "check_encryption_enabled",
+      "rollback": "restore_encryption"
+    }
+  },
+  "EC2": {
+    "security_group_port_open": {
+      "backup": ["security_group_rules"],
+      "deploy": "revoke_security_group_ingress",
+      "verify": "check_port_closed",
+      "rollback": "restore_security_group_rules"
+    }
+  },
+  "EBS": {
+    "snapshot_public": {
+      "backup": ["snapshot_permissions"],
+      "deploy": "remove_public_snapshot_permission",
+      "verify": "check_snapshot_private",
+      "rollback": "restore_snapshot_permissions"
+    },
+    "encryption_disabled": {
+      "backup": ["volume_encryption_status"],
+      "deploy": "create_encrypted_snapshot_and_volume",
+      "verify": "check_volume_encrypted",
+      "rollback": "restore_original_volume"
+    }
+  },
+  "AMI": {
+    "public_ami": {
+      "backup": ["ami_launch_permissions"],
+      "deploy": "remove_public_ami_permission",
+      "verify": "check_ami_private",
+      "rollback": "restore_ami_permissions"
+    }
+  },
+  "IAM": {
+    "wildcard_policy": {
+      "backup": ["user_policies"],
+      "deploy": "delete_user_policy",
+      "verify": "check_policy_deleted",
+      "rollback": "restore_user_policy"
+    },
+    "old_access_key": {
+      "backup": ["access_keys"],
+      "deploy": "deactivate_old_access_key",
+      "verify": "check_key_inactive",
+      "rollback": "restore_access_key_status"
+    },
+    "no_mfa_user": {
+      "backup": ["mfa_devices"],
+      "deploy": "no_auto_fix_manual_required",
+      "verify": "check_mfa_enabled",
+      "rollback": "no_rollback"
+    },
+    "no_mfa_root": {
+      "backup": ["root_mfa_status"],
+      "deploy": "manual_fix_required",
+      "verify": "check_root_mfa",
+      "rollback": "no_rollback"
+    }
+  },
+  "RDS": {
+    "publicly_accessible": {
+      "backup": ["rds_public_access_status"],
+      "deploy": "disable_public_access",
+      "verify": "check_public_access_disabled",
+      "rollback": "restore_public_access"
+    },
+    "encryption_disabled": {
+      "backup": ["rds_encryption_status"],
+      "deploy": "create_encrypted_snapshot_and_instance",
+      "verify": "check_encryption_enabled",
+      "rollback": "restore_original_instance"
+    }
+  },
+  "ECR": {
+    "public_repository": {
+      "backup": ["repository_policy"],
+      "deploy": "remove_public_policy",
+      "verify": "check_no_public_policy",
+      "rollback": "restore_repository_policy"
+    }
+  },
+  "EFS": {
+    "encryption_disabled": {
+      "backup": ["efs_encryption_status"],
+      "deploy": "create_encrypted_efs_and_migrate",
+      "verify": "check_efs_encrypted",
+      "rollback": "restore_original_efs"
+    },
+    "public_mount_target": {
+      "backup": ["mount_target_sg_rules"],
+      "deploy": "restrict_mount_target_sg",
+      "verify": "check_nfs_restricted",
+      "rollback": "restore_mount_target_sg"
+    }
+  },
+  "LAMBDA": {
+    "env_vars_not_encrypted": {
+      "backup": ["lambda_kms_key", "environment_variables"],
+      "deploy": "enable_kms_encryption",
+      "verify": "check_kms_enabled",
+      "rollback": "restore_original_config"
+    }
+  },
+  "VPC": {
+    "flow_logs_disabled": {
+      "backup": ["flow_logs_status"],
+      "deploy": "enable_flow_logs",
+      "verify": "check_flow_logs_enabled",
+      "rollback": "disable_flow_logs"
+    },
+    "default_vpc_in_use": {
+      "backup": ["vpc_configuration"],
+      "deploy": "manual_migration_required",
+      "verify": "check_not_default_vpc",
+      "rollback": "no_rollback"
+    }
+  },
+  "SQS": {
+    "encryption_disabled": {
+      "backup": ["sqs_kms_key"],
+      "deploy": "enable_sse_sqs",
+      "verify": "check_sse_enabled",
+      "rollback": "restore_original_kms_key"
+    }
+  },
+  "SNS": {
+    "encryption_disabled": {
+      "backup": ["sns_kms_key"],
+      "deploy": "enable_sse_sns",
+      "verify": "check_sse_enabled",
+      "rollback": "restore_original_kms_key"
+    }
+  },
+  "REDSHIFT": {
+    "encryption_disabled": {
+      "backup": ["redshift_encryption_status"],
+      "deploy": "create_encrypted_cluster_and_migrate",
+      "verify": "check_cluster_encrypted",
+      "rollback": "restore_original_cluster"
+    }
+  },
+  "DYNAMODB": {
+    "encryption_disabled": {
+      "backup": ["dynamodb_sse_status"],
+      "deploy": "enable_sse_dynamodb",
+      "verify": "check_sse_enabled",
+      "rollback": "disable_sse_dynamodb"
+    }
+  },
+  "CLOUDTRAIL": {
+    "disabled": {
+      "backup": ["cloudtrail_status"],
+      "deploy": "enable_multi_region_cloudtrail",
+      "verify": "check_cloudtrail_enabled",
+      "rollback": "disable_cloudtrail"
+    }
+  },
+  "CONFIG": {
+    "recorder_disabled": {
+      "backup": ["config_recorder_status"],
+      "deploy": "enable_config_recorder",
+      "verify": "check_config_recorder_enabled",
+      "rollback": "disable_config_recorder"
+    }
+  },
+  "GUARDDUTY": {
+    "disabled": {
+      "backup": ["guardduty_status"],
+      "deploy": "enable_guardduty",
+      "verify": "check_guardduty_enabled",
+      "rollback": "disable_guardduty"
+    }
+  },
+  "PASSWORD_POLICY": {
+    "not_enforced": {
+      "backup": ["password_policy"],
+      "deploy": "apply_password_policy",
+      "deploy_params": {"MinimumPasswordLength": 14, "RequireSymbols": true, "RequireNumbers": true, "RequireUppercaseCharacters": true, "RequireLowercaseCharacters": true, "MaxPasswordAge": 90, "PasswordReusePrevention": 24},
+      "verify": "check_password_policy_applied",
+      "rollback": "restore_password_policy"
+    }
+  }
+}
