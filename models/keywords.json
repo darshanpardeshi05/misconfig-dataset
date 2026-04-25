@@ -1,0 +1,252 @@
+{
+  "s3-public-read-acl.yaml": {
+    "keywords": ["PublicRead", "AccessControl: PublicRead", "BlockPublicAcls: false"],
+    "category": "Storage Exposure",
+    "severity": "CRITICAL"
+  },
+  "s3-public-read-write-acl.yaml": {
+    "keywords": ["PublicReadWrite", "AccessControl: PublicReadWrite", "BlockPublicAcls: false"],
+    "category": "Storage Exposure",
+    "severity": "CRITICAL"
+  },
+  "s3-block-public-access-disabled.yaml": {
+    "keywords": ["BlockPublicAcls: false", "BlockPublicPolicy: false", "IgnorePublicAcls: false", "RestrictPublicBuckets: false"],
+    "category": "Storage Exposure",
+    "severity": "HIGH"
+  },
+  "ebs-snapshot-public.yaml": {
+    "keywords": ["createVolumePermission", "group-names all", "modify-snapshot-attribute"],
+    "category": "Storage Exposure",
+    "severity": "CRITICAL"
+  },
+  "rds-snapshot-public.yaml": {
+    "keywords": ["modify-db-snapshot-attribute", "values-to-add all", "restore"],
+    "category": "Storage Exposure",
+    "severity": "CRITICAL"
+  },
+  "ecr-repository-public.yaml": {
+    "keywords": ["Principal: '*'", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage", "public pull"],
+    "category": "Storage Exposure",
+    "severity": "HIGH"
+  },
+  "ami-public.yaml": {
+    "keywords": ["modify-image-attribute", "launch-permission", "Group=all", "Add=[{Group=all}]"],
+    "category": "Storage Exposure",
+    "severity": "CRITICAL"
+  },
+  "efs-public-mount.yaml": {
+    "keywords": ["port 2049", "0.0.0.0/0", "MountTarget", "PublicSubnet"],
+    "category": "Storage Exposure",
+    "severity": "HIGH"
+  },
+  "s3-bucket-policy-public.yaml": {
+    "keywords": ["Principal: '*'", "Effect: Allow", "s3:GetObject", "BlockPublicPolicy: false"],
+    "category": "Storage Exposure",
+    "severity": "CRITICAL"
+  },
+  "s3-object-public-acl.yaml": {
+    "keywords": ["public-read", "put-object-acl", "ACL: 'public-read'"],
+    "category": "Storage Exposure",
+    "severity": "HIGH"
+  },
+  "iam-wildcard-action.yaml": {
+    "keywords": ["Action: '*'", "Effect: Allow", "Resource: '*", "Action: [*]"],
+    "category": "IAM Over-Permission",
+    "severity": "HIGH"
+  },
+  "iam-wildcard-resource.yaml": {
+    "keywords": ["Resource: '*'", "Effect: Allow", "Resource: [*]"],
+    "category": "IAM Over-Permission",
+    "severity": "HIGH"
+  },
+  "iam-wildcard-both.yaml": {
+    "keywords": ["Action: '*'", "Resource: '*'", "AdministratorAccess", "Effect: Allow"],
+    "category": "IAM Over-Permission",
+    "severity": "CRITICAL"
+  },
+  "iam-admin-role.yaml": {
+    "keywords": ["AdministratorAccess", "arn:aws:iam::aws:policy/AdministratorAccess", "ManagedPolicyArns"],
+    "category": "IAM Over-Permission",
+    "severity": "CRITICAL"
+  },
+  "iam-s3-full-access.yaml": {
+    "keywords": ["s3:*", "Action: s3:*", "arn:aws:s3:::*"],
+    "category": "IAM Over-Permission",
+    "severity": "HIGH"
+  },
+  "iam-ec2-full-access.yaml": {
+    "keywords": ["ec2:*", "Action: ec2:*", "ec2:RunInstances", "ec2:TerminateInstances"],
+    "category": "IAM Over-Permission",
+    "severity": "HIGH"
+  },
+  "iam-missing-mfa-root.yaml": {
+    "keywords": ["Root MFA", "RootAccountMFAEnabled", "VirtualMFADevice", "MFADevice"],
+    "category": "IAM Over-Permission",
+    "severity": "CRITICAL"
+  },
+  "iam-missing-mfa-user.yaml": {
+    "keywords": ["MFADevice", "VirtualMFADevice", "EnableMFADevice", "User without MFA"],
+    "category": "IAM Over-Permission",
+    "severity": "HIGH"
+  },
+  "iam-inactive-user.yaml": {
+    "keywords": ["Inactive user", "Orphaned account", "LastUsed", "User not deleted"],
+    "category": "IAM Over-Permission",
+    "severity": "MEDIUM"
+  },
+  "iam-old-access-key.yaml": {
+    "keywords": ["AccessKey", "CreateDate", "Key rotation", "Old access key", "> 90 days"],
+    "category": "IAM Over-Permission",
+    "severity": "MEDIUM"
+  },
+  "iam-trust-policy-principal-star.yaml": {
+    "keywords": ["Principal: '*'", "sts:AssumeRole", "Trust policy", "AssumeRolePolicyDocument"],
+    "category": "IAM Over-Permission",
+    "severity": "CRITICAL"
+  },
+  "lambda-execution-role-overly-permissive.yaml": {
+    "keywords": ["AdministratorAccess", "lambda.amazonaws.com", "Action: '*", "Resource: '*"],
+    "category": "IAM Over-Permission",
+    "severity": "CRITICAL"
+  },
+  "sg-ssh-open-world.yaml": {
+    "keywords": ["port 22", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "FromPort: 22"],
+    "category": "Network Oversights",
+    "severity": "HIGH"
+  },
+  "sg-rdp-open-world.yaml": {
+    "keywords": ["port 3389", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "FromPort: 3389"],
+    "category": "Network Oversights",
+    "severity": "HIGH"
+  },
+  "sg-mysql-open-world.yaml": {
+    "keywords": ["port 3306", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "PubliclyAccessible: true"],
+    "category": "Network Oversights",
+    "severity": "CRITICAL"
+  },
+  "sg-postgres-open-world.yaml": {
+    "keywords": ["port 5432", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "PubliclyAccessible: true"],
+    "category": "Network Oversights",
+    "severity": "CRITICAL"
+  },
+  "sg-redis-open-world.yaml": {
+    "keywords": ["port 6379", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "Redis"],
+    "category": "Network Oversights",
+    "severity": "CRITICAL"
+  },
+  "sg-mongodb-open-world.yaml": {
+    "keywords": ["port 27017", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "MongoDB"],
+    "category": "Network Oversights",
+    "severity": "CRITICAL"
+  },
+  "sg-all-ports-open.yaml": {
+    "keywords": ["-1", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "all ports"],
+    "category": "Network Oversights",
+    "severity": "CRITICAL"
+  },
+  "vpc-flow-logs-disabled.yaml": {
+    "keywords": ["FlowLog", "VPCFlowLogs", "FlowLogsDisabled", "No Flow Logs"],
+    "category": "Network Oversights",
+    "severity": "MEDIUM"
+  },
+  "rds-publicly-accessible.yaml": {
+    "keywords": ["PubliclyAccessible: true", "RDS public", "database public", "0.0.0.0/0"],
+    "category": "Network Oversights",
+    "severity": "CRITICAL"
+  },
+  "default-vpc-in-use.yaml": {
+    "keywords": ["Default VPC", "isDefault", "default-vpc", "MapPublicIpOnLaunch: true"],
+    "category": "Network Oversights",
+    "severity": "MEDIUM"
+  },
+  "s3-encryption-disabled.yaml": {
+    "keywords": ["BucketEncryption", "SSE-S3", "encryption disabled", "no encryption"],
+    "category": "Lack of Encryption",
+    "severity": "MEDIUM"
+  },
+  "s3-sse-not-enforced.yaml": {
+    "keywords": ["PutObject", "x-amz-server-side-encryption", "s3:x-amz-server-side-encryption"],
+    "category": "Lack of Encryption",
+    "severity": "MEDIUM"
+  },
+  "ebs-encryption-disabled.yaml": {
+    "keywords": ["Encrypted: false", "EBS encryption", "Volume encryption"],
+    "category": "Lack of Encryption",
+    "severity": "HIGH"
+  },
+  "rds-encryption-disabled.yaml": {
+    "keywords": ["StorageEncrypted: false", "RDS encryption", "database encryption"],
+    "category": "Lack of Encryption",
+    "severity": "HIGH"
+  },
+  "dynamodb-encryption-disabled.yaml": {
+    "keywords": ["SSESpecification", "KMSMasterKeyId", "AWS owned key", "default encryption"],
+    "category": "Lack of Encryption",
+    "severity": "MEDIUM"
+  },
+  "lambda-env-not-encrypted.yaml": {
+    "keywords": ["KmsKeyArn", "Environment", "Variables", "kms:Encrypt"],
+    "category": "Lack of Encryption",
+    "severity": "HIGH"
+  },
+  "sqs-encryption-disabled.yaml": {
+    "keywords": ["KmsMasterKeyId", "SqsManagedSseEnabled", "SSE", "encryption"],
+    "category": "Lack of Encryption",
+    "severity": "MEDIUM"
+  },
+  "sns-encryption-disabled.yaml": {
+    "keywords": ["KmsMasterKeyId", "TopicEncryption", "sns:Encrypt"],
+    "category": "Lack of Encryption",
+    "severity": "MEDIUM"
+  },
+  "efs-encryption-disabled.yaml": {
+    "keywords": ["Encrypted: false", "EFS encryption", "KmsKeyId"],
+    "category": "Lack of Encryption",
+    "severity": "HIGH"
+  },
+  "redshift-encryption-disabled.yaml": {
+    "keywords": ["Encrypted: false", "Redshift encryption", "KmsKeyId"],
+    "category": "Lack of Encryption",
+    "severity": "HIGH"
+  },
+  "ec2-auto-assign-public-ip.yaml": {
+    "keywords": ["MapPublicIpOnLaunch: true", "AssociatePublicIpAddress: true", "PublicIp"],
+    "category": "Insecure Defaults",
+    "severity": "MEDIUM"
+  },
+  "default-security-group-in-use.yaml": {
+    "keywords": ["default security group", "GroupId", "SecurityGroupIngress", "0.0.0.0/0"],
+    "category": "Insecure Defaults",
+    "severity": "HIGH"
+  },
+  "ec2-default-credential-report-not-enabled.yaml": {
+    "keywords": ["credential report", "get-credential-report", "generate-credential-report"],
+    "category": "Insecure Defaults",
+    "severity": "LOW"
+  },
+  "cloudtrail-disabled.yaml": {
+    "keywords": ["CloudTrail", "Trail", "IsMultiRegionTrail", "EnableLogFileValidation"],
+    "category": "Insecure Defaults",
+    "severity": "HIGH"
+  },
+  "config-recorder-disabled.yaml": {
+    "keywords": ["ConfigurationRecorder", "RecordingGroup", "DeliveryChannel"],
+    "category": "Insecure Defaults",
+    "severity": "HIGH"
+  },
+  "guardduty-disabled.yaml": {
+    "keywords": ["GuardDuty", "Detector", "FindingPublishingFrequency", "EnableGuardDuty"],
+    "category": "Insecure Defaults",
+    "severity": "HIGH"
+  },
+  "s3-logging-disabled.yaml": {
+    "keywords": ["LoggingConfiguration", "TargetBucket", "TargetPrefix", "Server access logging"],
+    "category": "Insecure Defaults",
+    "severity": "MEDIUM"
+  },
+  "iam-user-without-password-policy.yaml": {
+    "keywords": ["PasswordPolicy", "MinimumPasswordLength", "RequireUppercaseCharacters", "MaxPasswordAge"],
+    "category": "Insecure Defaults",
+    "severity": "MEDIUM"
+  }
+}
