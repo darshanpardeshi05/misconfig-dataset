@@ -1,0 +1,25 @@
+policies:
+- name: check-sg-ssh-open-world
+  resource: aws.ec2
+  description: Security group allows SSH access from entire internet (0.0.0.0/0).
+    This exposes EC2 instances to brute force attacks.
+  metadata:
+    rule_id: SG-001
+    category: Network Oversights
+    severity: HIGH
+    remediation: Restrict SSH access to specific IP addresses or VPN ranges only
+    keywords:
+    - port 22
+    - 0.0.0.0/0
+    - 'CidrIp: 0.0.0.0/0'
+    - 'FromPort: 22'
+    - 'ToPort: 22'
+    - SSH
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: SG-001
+  actions:
+  - type: notify
+    template: default
+    priority: info

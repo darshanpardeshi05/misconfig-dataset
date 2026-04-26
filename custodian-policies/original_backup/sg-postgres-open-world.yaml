@@ -1,0 +1,27 @@
+policies:
+- name: check-sg-postgres-open-world
+  resource: aws.ec2
+  description: Security group allows PostgreSQL access from entire internet (0.0.0.0/0).
+    This exposes databases to direct attack and data theft.
+  metadata:
+    rule_id: SG-004
+    category: Network Oversights
+    severity: CRITICAL
+    remediation: Restrict PostgreSQL access to specific application servers or VPC
+      CIDR only. Databases should never be publicly accessible.
+    keywords:
+    - port 5432
+    - 0.0.0.0/0
+    - 'CidrIp: 0.0.0.0/0'
+    - 'FromPort: 5432'
+    - 'ToPort: 5432'
+    - PostgreSQL
+    - PubliclyAccessible
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: SG-004
+  actions:
+  - type: notify
+    template: default
+    priority: info

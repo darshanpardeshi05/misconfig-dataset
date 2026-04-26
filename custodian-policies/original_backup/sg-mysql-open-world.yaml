@@ -1,0 +1,27 @@
+policies:
+- name: check-sg-mysql-open-world
+  resource: aws.ec2
+  description: Security group allows MySQL access from entire internet (0.0.0.0/0).
+    This exposes databases to direct attack and data theft.
+  metadata:
+    rule_id: SG-003
+    category: Network Oversights
+    severity: CRITICAL
+    remediation: Restrict MySQL access to specific application servers or VPC CIDR
+      only. Databases should never be publicly accessible.
+    keywords:
+    - port 3306
+    - 0.0.0.0/0
+    - 'CidrIp: 0.0.0.0/0'
+    - 'FromPort: 3306'
+    - 'ToPort: 3306'
+    - MySQL
+    - PubliclyAccessible
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: SG-003
+  actions:
+  - type: notify
+    template: default
+    priority: info

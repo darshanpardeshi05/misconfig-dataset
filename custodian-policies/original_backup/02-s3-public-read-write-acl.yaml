@@ -1,0 +1,23 @@
+policies:
+- name: check-s3-public-read-write-acl
+  resource: aws.s3
+  description: S3 bucket allows public read AND write access via ACL
+  metadata:
+    rule_id: S3-002
+    category: Storage-Exposure
+    severity: CRITICAL
+    remediation: Set AccessControl to Private and enable BlockPublicAccess
+    keywords:
+    - PublicReadWrite
+    - S3 Public Write
+    - Public ACL Write
+    - Anyone can upload
+    - BlockPublicAccess disabled
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: S3-002
+  actions:
+  - type: notify
+    template: default
+    priority: info

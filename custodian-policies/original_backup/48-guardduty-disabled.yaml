@@ -1,0 +1,23 @@
+policies:
+- name: check-guardduty-disabled
+  resource: aws.guardduty
+  description: Amazon GuardDuty is disabled. No intelligent threat detection, anomaly
+    monitoring, or finding generation for your AWS account.
+  metadata:
+    rule_id: GUARDDUTY-001
+    category: Insecure Defaults
+    severity: HIGH
+    remediation: Enable GuardDuty in all regions with S3 and SNS publishing for findings
+    keywords:
+    - GuardDuty
+    - Detector
+    - FindingPublishingFrequency
+    - EnableGuardDuty
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: GUARDDUTY-001
+  actions:
+  - type: notify
+    template: default
+    priority: info

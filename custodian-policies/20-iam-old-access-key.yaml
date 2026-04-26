@@ -1,0 +1,23 @@
+policies:
+- name: check-iam-old-access-key
+  resource: aws.iam-user
+  description: IAM access key is older than 90 days and has not been rotated
+  metadata:
+    rule_id: IAM-010
+    category: IAM & Access Over-Permission
+    severity: MEDIUM
+    remediation: Rotate access keys every 90 days
+    keywords:
+    - AccessKey
+    - CreateDate
+    - Key rotation
+    - Old access key
+    - '> 90 days'
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: IAM-010
+  actions:
+  - type: notify
+    template: default
+    priority: info

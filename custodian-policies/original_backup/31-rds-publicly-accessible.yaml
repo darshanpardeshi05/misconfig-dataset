@@ -1,0 +1,26 @@
+policies:
+- name: check-rds-publicly-accessible
+  resource: aws.rds
+  description: RDS database has PubliclyAccessible=true, meaning it has a public IP
+    address and is accessible from the internet. Databases should never be publicly
+    accessible.
+  metadata:
+    rule_id: RDS-002
+    category: Network Oversights
+    severity: CRITICAL
+    remediation: Set PubliclyAccessible=false. Database should only be accessible
+      from within VPC. Use bastion host or VPN if external access is needed.
+    keywords:
+    - 'PubliclyAccessible: true'
+    - RDS public
+    - database public
+    - 0.0.0.0/0
+    - port 3306
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: RDS-002
+  actions:
+  - type: notify
+    template: default
+    priority: info

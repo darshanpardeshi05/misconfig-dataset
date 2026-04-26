@@ -1,0 +1,24 @@
+policies:
+- name: check-s3-bucket-policy-public
+  resource: aws.s3
+  description: S3 bucket policy uses Principal '*' which grants access to anyone on
+    the internet
+  metadata:
+    rule_id: S3-004
+    category: Storage-Exposure
+    severity: CRITICAL
+    remediation: Remove public policy and restrict access to specific IAM principals
+    keywords:
+    - Principal *
+    - S3 public policy
+    - bucket policy public
+    - s3:GetObject public
+    - BlockPublicPolicy false
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: S3-004
+  actions:
+  - type: notify
+    template: default
+    priority: info

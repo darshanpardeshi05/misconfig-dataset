@@ -1,0 +1,25 @@
+policies:
+- name: check-default-vpc-in-use
+  resource: aws.vpc
+  description: Resources are deployed in the Default VPC. Default VPC has auto-assigned
+    public IPs, permissive default security group, and lacks proper network controls.
+  metadata:
+    rule_id: VPC-002
+    category: Network Oversights
+    severity: MEDIUM
+    remediation: Create custom VPC with private subnets, NAT gateways, and restricted
+      security groups. Migrate all resources from default VPC.
+    keywords:
+    - Default VPC
+    - isDefault
+    - default-vpc
+    - 'MapPublicIpOnLaunch: true'
+    - default security group
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: VPC-002
+  actions:
+  - type: notify
+    template: default
+    priority: info

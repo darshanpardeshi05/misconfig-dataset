@@ -1,0 +1,25 @@
+policies:
+- name: check-sg-rdp-open-world
+  resource: aws.ec2
+  description: Security group allows RDP access from entire internet (0.0.0.0/0).
+    This exposes Windows EC2 instances to brute force attacks.
+  metadata:
+    rule_id: SG-002
+    category: Network Oversights
+    severity: HIGH
+    remediation: Restrict RDP access to specific IP addresses or VPN ranges only
+    keywords:
+    - port 3389
+    - 0.0.0.0/0
+    - 'CidrIp: 0.0.0.0/0'
+    - 'FromPort: 3389'
+    - 'ToPort: 3389'
+    - RDP
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: SG-002
+  actions:
+  - type: notify
+    template: default
+    priority: info

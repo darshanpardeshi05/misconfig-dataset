@@ -1,0 +1,24 @@
+policies:
+- name: check-ebs-encryption-disabled
+  resource: aws.ebs
+  description: EBS volume has encryption disabled. Any data written to this volume
+    (application data, logs, databases) is stored unencrypted at rest.
+  metadata:
+    rule_id: EBS-002
+    category: Lack of Encryption
+    severity: HIGH
+    remediation: 'Enable EBS encryption by default at the account level, or specify
+      Encrypted: true for each volume'
+    keywords:
+    - 'Encrypted: false'
+    - EBS encryption
+    - Volume encryption
+    - ebs-encryption-disabled
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: EBS-002
+  actions:
+  - type: notify
+    template: default
+    priority: info

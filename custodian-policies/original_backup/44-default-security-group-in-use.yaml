@@ -1,0 +1,26 @@
+policies:
+- name: check-default-security-group-in-use
+  resource: aws.ec2
+  description: Default security group is modified to allow SSH from 0.0.0.0/0, and
+    an EC2 instance is launched using it. This exposes the instance to internet SSH
+    attacks and bypasses network segmentation best practices.
+  metadata:
+    rule_id: EC2-002
+    category: Insecure Defaults
+    severity: HIGH
+    remediation: Create and use custom security groups with least-privilege rules.
+      Do not modify or rely on default security groups for workloads.
+    keywords:
+    - default security group
+    - 0.0.0.0/0
+    - SecurityGroupIngress
+    - SSH
+    - port 22
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: EC2-002
+  actions:
+  - type: notify
+    template: default
+    priority: info

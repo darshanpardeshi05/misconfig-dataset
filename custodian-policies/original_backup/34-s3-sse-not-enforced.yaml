@@ -1,0 +1,26 @@
+policies:
+- name: check-s3-sse-not-enforced
+  resource: aws.s3
+  description: S3 bucket does not enforce encryption for uploaded objects. Clients
+    can upload unencrypted objects without any encryption headers.
+  metadata:
+    rule_id: S3-007
+    category: Lack of Encryption
+    severity: MEDIUM
+    remediation: Add bucket policy that denies PutObject requests without x-amz-server-side-encryption
+      header
+    keywords:
+    - PutObject
+    - x-amz-server-side-encryption
+    - s3:x-amz-server-side-encryption
+    - SSE-S3
+    - Deny
+    - encryption header
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: S3-007
+  actions:
+  - type: notify
+    template: default
+    priority: info

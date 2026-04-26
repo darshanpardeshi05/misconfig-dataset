@@ -1,0 +1,25 @@
+policies:
+- name: check-vpc-flow-logs-disabled
+  resource: aws.vpc
+  description: VPC Flow Logs are disabled. No network traffic logs are captured, making
+    it impossible to detect unauthorized access, data exfiltration, or network attacks.
+  metadata:
+    rule_id: VPC-001
+    category: Network Oversights
+    severity: MEDIUM
+    remediation: Enable VPC Flow Logs for all VPCs and subnets. Send logs to CloudWatch
+      Logs or S3 for analysis.
+    keywords:
+    - FlowLog
+    - VPCFlowLogs
+    - FlowLogsDisabled
+    - No Flow Logs
+    - vpc-flow-logs
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: VPC-001
+  actions:
+  - type: notify
+    template: default
+    priority: info

@@ -1,0 +1,27 @@
+policies:
+- name: check-sg-redis-open-world
+  resource: aws.ec2
+  description: Security group allows Redis access from entire internet (0.0.0.0/0).
+    Redis has no authentication by default - this is extremely dangerous.
+  metadata:
+    rule_id: SG-005
+    category: Network Oversights
+    severity: CRITICAL
+    remediation: Restrict Redis access to specific application servers only. Enable
+      Redis AUTH password if absolutely necessary.
+    keywords:
+    - port 6379
+    - 0.0.0.0/0
+    - 'CidrIp: 0.0.0.0/0'
+    - 'FromPort: 6379'
+    - 'ToPort: 6379'
+    - Redis
+    - ElastiCache
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: SG-005
+  actions:
+  - type: notify
+    template: default
+    priority: info

@@ -1,0 +1,24 @@
+policies:
+- name: check-efs-public-mount
+  resource: aws.efs
+  description: EFS file system has mount target in public subnet with security group
+    allowing NFS from anywhere
+  metadata:
+    rule_id: EFS-001
+    category: Storage-Exposure
+    severity: HIGH
+    remediation: Move mount target to private subnet and restrict NFS access
+    keywords:
+    - EFS public
+    - NFS 2049 open
+    - mount target public
+    - 0.0.0.0/0
+    - unencrypted EFS
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: EFS-001
+  actions:
+  - type: notify
+    template: default
+    priority: info

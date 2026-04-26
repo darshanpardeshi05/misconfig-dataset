@@ -1,0 +1,27 @@
+policies:
+- name: check-sg-mongodb-open-world
+  resource: aws.ec2
+  description: Security group allows MongoDB access from entire internet (0.0.0.0/0).
+    MongoDB has no authentication by default in older versions - extremely dangerous.
+  metadata:
+    rule_id: SG-006
+    category: Network Oversights
+    severity: CRITICAL
+    remediation: Restrict MongoDB access to specific application servers only. Enable
+      MongoDB authentication and authorization.
+    keywords:
+    - port 27017
+    - 0.0.0.0/0
+    - 'CidrIp: 0.0.0.0/0'
+    - 'FromPort: 27017'
+    - 'ToPort: 27017'
+    - MongoDB
+    - DocumentDB
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: SG-006
+  actions:
+  - type: notify
+    template: default
+    priority: info

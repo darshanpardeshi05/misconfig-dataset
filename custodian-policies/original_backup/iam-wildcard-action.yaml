@@ -1,0 +1,23 @@
+policies:
+- name: check-iam-wildcard-action
+  resource: aws.iam-user
+  description: IAM policy allows ALL actions (*) which violates least privilege
+  metadata:
+    rule_id: IAM-001
+    category: IAM-OverPermission
+    severity: HIGH
+    remediation: Restrict actions to only required services
+    keywords:
+    - Action *
+    - iam wildcard action
+    - over permissive policy
+    - Effect Allow Resource *
+    - full access policy
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: IAM-001
+  actions:
+  - type: notify
+    template: default
+    priority: info

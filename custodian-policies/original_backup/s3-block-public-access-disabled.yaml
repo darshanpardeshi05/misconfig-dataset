@@ -1,0 +1,24 @@
+policies:
+- name: check-s3-block-public-access-disabled
+  resource: aws.s3
+  description: S3 bucket has Block Public Access completely disabled, allowing future
+    public exposure
+  metadata:
+    rule_id: S3-003
+    category: Storage-Exposure
+    severity: HIGH
+    remediation: Enable Block Public Access for the bucket or at account level
+    keywords:
+    - BlockPublicAccess disabled
+    - PublicAccessBlock false
+    - S3 no protection
+    - Public policy allowed
+    - Public ACL allowed
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: S3-003
+  actions:
+  - type: notify
+    template: default
+    priority: info

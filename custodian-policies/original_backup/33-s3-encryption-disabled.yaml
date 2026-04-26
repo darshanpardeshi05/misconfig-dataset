@@ -1,0 +1,24 @@
+policies:
+- name: check-s3-encryption-disabled
+  resource: aws.s3
+  description: S3 bucket does not have default encryption enabled. Data uploaded to
+    this bucket will be stored unencrypted at rest.
+  metadata:
+    rule_id: S3-006
+    category: Lack of Encryption
+    severity: MEDIUM
+    remediation: Enable default encryption on S3 bucket using SSE-S3 or SSE-KMS
+    keywords:
+    - BucketEncryption
+    - SSE-S3
+    - encryption disabled
+    - no encryption
+    - ServerSideEncryptionConfiguration
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: S3-006
+  actions:
+  - type: notify
+    template: default
+    priority: info

@@ -1,0 +1,23 @@
+policies:
+- name: check-iam-wildcard-resource
+  resource: aws.iam-user
+  description: IAM policy allows access to ALL resources (*) which is overly permissive
+  metadata:
+    rule_id: IAM-002
+    category: IAM-OverPermission
+    severity: HIGH
+    remediation: Restrict Resource to specific ARNs
+    keywords:
+    - Resource *
+    - iam wildcard resource
+    - over permissive resource
+    - s3 all buckets access
+    - Resource star
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: IAM-002
+  actions:
+  - type: notify
+    template: default
+    priority: info

@@ -1,0 +1,28 @@
+policies:
+- name: check-lambda-env-not-encrypted
+  resource: aws.lambda
+  description: Lambda function environment variables are not encrypted with a customer
+    managed KMS key. While AWS encrypts them by default, using default key means less
+    control and potential exposure of sensitive data (API keys, database passwords)
+    in plaintext in Lambda console/API.
+  metadata:
+    rule_id: LAMBDA-001
+    category: Lack of Encryption
+    severity: HIGH
+    remediation: Enable encryption with customer managed KMS key for Lambda environment
+      variables
+    keywords:
+    - KmsKeyArn
+    - Environment
+    - Variables
+    - kms:Encrypt
+    - kms:Decrypt
+    - default AWS managed key
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: LAMBDA-001
+  actions:
+  - type: notify
+    template: default
+    priority: info

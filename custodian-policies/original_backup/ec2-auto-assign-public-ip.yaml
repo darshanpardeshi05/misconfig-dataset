@@ -1,0 +1,25 @@
+policies:
+- name: check-ec2-auto-assign-public-ip
+  resource: aws.ec2
+  description: EC2 instance is launched in a public subnet with auto-assign public
+    IP enabled. This gives the instance a public IP address, increasing attack surface
+    unnecessarily.
+  metadata:
+    rule_id: EC2-001
+    category: Insecure Defaults
+    severity: MEDIUM
+    remediation: Use private subnets for workloads that don't need direct internet
+      access. If public IP is required, restrict security groups to specific IPs.
+    keywords:
+    - 'MapPublicIpOnLaunch: true'
+    - 'AssociatePublicIpAddress: true'
+    - PublicIp
+    - auto-assign
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: EC2-001
+  actions:
+  - type: notify
+    template: default
+    priority: info

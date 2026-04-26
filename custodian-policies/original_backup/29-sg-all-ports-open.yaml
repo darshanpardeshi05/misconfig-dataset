@@ -1,0 +1,27 @@
+policies:
+- name: check-sg-all-ports-open
+  resource: aws.ec2
+  description: Security group allows ALL traffic from entire internet (0.0.0.0/0).
+    This is the worst possible network misconfiguration - completely exposes all resources.
+  metadata:
+    rule_id: SG-007
+    category: Network Oversights
+    severity: CRITICAL
+    remediation: IMMEDIATELY remove this rule. Security groups should only allow specific
+      ports needed for application functionality.
+    keywords:
+    - '-1'
+    - 0.0.0.0/0
+    - 'CidrIp: 0.0.0.0/0'
+    - 'FromPort: -1'
+    - 'ToPort: -1'
+    - all ports
+    - all traffic
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: SG-007
+  actions:
+  - type: notify
+    template: default
+    priority: info

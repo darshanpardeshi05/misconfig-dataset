@@ -1,0 +1,24 @@
+policies:
+- name: check-redshift-encryption-disabled
+  resource: aws.redshift
+  description: Redshift cluster has encryption at rest disabled. All data in the data
+    warehouse (customer data, financial records, analytics) is stored unencrypted.
+  metadata:
+    rule_id: REDSHIFT-001
+    category: Lack of Encryption
+    severity: HIGH
+    remediation: 'Enable encryption when creating Redshift clusters. Note: Encryption
+      cannot be enabled on existing clusters without data migration.'
+    keywords:
+    - 'Encrypted: false'
+    - Redshift encryption
+    - KmsKeyId
+    - StorageEncrypted
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: REDSHIFT-001
+  actions:
+  - type: notify
+    template: default
+    priority: info

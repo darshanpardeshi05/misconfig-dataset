@@ -1,0 +1,23 @@
+policies:
+- name: check-ebs-snapshot-public
+  resource: aws.ebs
+  description: EBS snapshot is shared publicly with all AWS accounts
+  metadata:
+    rule_id: EBS-001
+    category: Storage-Exposure
+    severity: CRITICAL
+    remediation: Modify snapshot permissions to private or specific accounts only
+    keywords:
+    - EBS snapshot public
+    - createVolumePermission all
+    - snapshot shared
+    - public snapshot
+    - unencrypted snapshot
+  filters:
+  - type: value
+    key: tag:Misconfiguration
+    value: EBS-001
+  actions:
+  - type: notify
+    template: default
+    priority: info
