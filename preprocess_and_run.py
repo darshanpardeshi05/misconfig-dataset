@@ -2,7 +2,7 @@
 """
 Preprocess and Run Pipeline
 Reads normalized findings, extracts category/severity/keywords,
-calls pipeline.py and phase4_complete.py for auto-fix
+calls pipeline.py ONLY (which will automatically trigger phase4_complete.py)
 """
 
 import json
@@ -78,7 +78,6 @@ class PreprocessAndRun:
         description = finding.get('description', '')
         desc_lower = description.lower()
         
-        # Simple keyword extraction based on description
         if 's3' in desc_lower and 'public' in desc_lower:
             return 'PublicRead'
         elif 'ebs' in desc_lower and 'snapshot' in desc_lower:
@@ -107,7 +106,7 @@ class PreprocessAndRun:
             return 'misconfiguration'
     
     def run_pipeline(self, category, severity, keywords):
-        """Call pipeline.py to get prediction"""
+        """Call pipeline.py (which will trigger phase4_complete.py internally)"""
         print(f"\n  Calling pipeline.py...")
         print(f"    Input: category={category}, severity={severity}")
         print(f"    Keywords: {keywords}")
@@ -115,32 +114,23 @@ class PreprocessAndRun:
         try:
             result = subprocess.run(
                 ['python3', 'pipeline.py', category, severity, keywords],
-                capture_output=True, text=True, timeout=30, cwd=self.base_dir
-            )
-            
-            predicted_id = None
-            for line in result.stdout.split('\n'):
-                numbers = re.findall(r'\d+', line)
-                if numbers and ('Predicted Misconfig ID:' in line or 'Final Verdict:' in line):
-                    predicted_id = numbers[0]
-                    break
-            
-            return {'success': True, 'predicted_id': predicted_id, 'output': result.stdout[:300]}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-    
-    def run_autofix(self, category, severity, keywords):
-        """Call phase4_complete.py for auto-fix"""
-        print(f"\n  Running auto-fix...")
-        
-        try:
-            result = subprocess.run(
-                ['python3', 'phase4_complete.py', category, severity, keywords],
                 capture_output=True, text=True, timeout=300, cwd=self.base_dir
             )
-            return {'success': result.returncode == 0, 'output': result.stdout[:300]}
+            
+            if result.returncode == 0:
+                print(f"    Pipeline completed successfully")
+                # Print last few lines of output for visibility
+                output_lines = result.stdout.split('\n')
+                for line in output_lines[-10:]:
+                    if line.strip():
+                        print(f"    {line[:100]}")
+            else:
+                print(f"    Pipeline failed: {result.stderr[:200]}")
+            
+            return result.returncode == 0
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            print(f"    Pipeline error: {e}")
+            return False
     
     def run(self):
         if not self.normalized_file.exists():
@@ -156,6 +146,7 @@ class PreprocessAndRun:
         
         print(f"\nFound {total} findings to process")
         
+        success_count = 0
         for idx, finding in enumerate(findings, 1):
             print(f"\n[{idx}/{total}] Processing finding...")
             print(f"  Tool: {finding.get('tool')}")
@@ -166,27 +157,17 @@ class PreprocessAndRun:
             severity = finding.get('severity', 'MEDIUM')
             keywords = self.extract_keywords_for_pipeline(finding)
             
-            # Run pipeline.py
-            pipeline_result = self.run_pipeline(category, severity, keywords)
-            
-            if pipeline_result['success']:
-                print(f"    Pipeline success. Predicted ID: {pipeline_result.get('predicted_id')}")
-                
-                # Run auto-fix
-                autofix_result = self.run_autofix(category, severity, keywords)
-                if autofix_result['success']:
-                    print(f"    Auto-fix completed successfully")
-                else:
-                    print(f"    Auto-fix failed: {autofix_result.get('error')}")
-            else:
-                print(f"    Pipeline failed: {pipeline_result.get('error')}")
+            # Only call pipeline.py - it will trigger Phase 4 automatically
+            if self.run_pipeline(category, severity, keywords):
+                success_count += 1
         
         print("\n" + "=" * 60)
         print("PREPROCESSING AND PIPELINE EXECUTION COMPLETE")
         print("=" * 60)
-        return True
+        print(f"  Successful: {success_count}/{total}")
+        print("=" * 60)
+        return success_count == total
 
 if __name__ == "__main__":
     processor = PreprocessAndRun()
     processor.run()
-
