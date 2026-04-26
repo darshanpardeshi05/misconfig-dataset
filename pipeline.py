@@ -2,12 +2,14 @@
 """
 Complete Pipeline for AWS Misconfiguration Detection
 Includes: Keyword Matching + Random Forest + XGBoost + Isolation Forest
+Now triggers Phase 4 auto-fix automatically
 """
 
 import joblib
 import pandas as pd
 import numpy as np
 import json
+import subprocess
 from pathlib import Path
 from difflib import get_close_matches
 
@@ -76,16 +78,12 @@ class MisconfigDetectionPipeline:
                     self.keyword_to_file[keyword_lower] = []
                 self.keyword_to_file[keyword_lower].append(filename)
         
-        # Also create mapping from filename to index number
         self.file_to_index = {}
         for idx, filename in enumerate(self.keyword_mapping.keys(), start=1):
             self.file_to_index[filename] = idx
     
     def keyword_match(self, input_keywords):
-        """
-        Match input keywords against known keywords
-        Returns matched filename and confidence score
-        """
+        """Match input keywords against known keywords"""
         if isinstance(input_keywords, str):
             input_keywords = [input_keywords]
         
@@ -128,8 +126,6 @@ class MisconfigDetectionPipeline:
         """Predict using Random Forest model"""
         try:
             keywords_vectorized = self.vectorizer.transform([keywords])
-            # Note: Random Forest expects specific features
-            # This is a placeholder - actual implementation depends on RF training
             return None
         except Exception as e:
             print(f"  Warning: Random Forest prediction failed: {e}")
@@ -141,10 +137,8 @@ class MisconfigDetectionPipeline:
             return None
         
         try:
-            # Check if input is an anomaly
-            anomaly_score = self.if_model.decision_function(encoded_input)
             anomaly_pred = self.if_model.predict(encoded_input)
-            return int(anomaly_pred[0] == -1)  # 1 for anomaly, 0 for normal
+            return int(anomaly_pred[0] == -1)
         except Exception as e:
             print(f"  Warning: Isolation Forest prediction failed: {e}")
             return None
@@ -165,10 +159,31 @@ class MisconfigDetectionPipeline:
             return self.fix_policies[misconfig_id_str]
         return None
     
+    def trigger_phase4(self, category, severity, keywords, predicted_id):
+        """Trigger Phase 4 auto-fix after prediction"""
+        print("\n" + "=" * 60)
+        print("TRIGGERING PHASE 4: AUTO-FIX")
+        print("=" * 60)
+        print(f"Predicted Misconfig ID: {predicted_id}")
+        
+        try:
+            result = subprocess.run(
+                ['python3', 'phase4_complete.py', '--id', str(predicted_id), category, severity, keywords],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            
+            if result.returncode == 0:
+                print("✓ Phase 4 auto-fix completed successfully")
+            else:
+                print(f"✗ Phase 4 auto-fix failed: {result.stderr}")
+                
+        except Exception as e:
+            print(f"Error triggering Phase 4: {e}")
+    
     def predict(self, category, severity, keywords):
-        """
-        Main prediction method - Complete pipeline
-        """
+        """Main prediction method - Complete pipeline"""
         print("\n" + "-" * 40)
         print("PREDICTION REQUEST")
         print("-" * 40)
@@ -264,7 +279,6 @@ class MisconfigDetectionPipeline:
         return result
 
 
-# CLI Support
 if __name__ == "__main__":
     import sys
     
@@ -285,8 +299,13 @@ if __name__ == "__main__":
         if result['fix_policy']:
             print(f"\nRemediation: {result['fix_policy'].get('remediation', 'N/A')}")
         
+        # Trigger Phase 4 auto-fix
+        if result['final_verdict']:
+            pipeline.trigger_phase4(category, severity, keywords, result['final_verdict'])
+        
     else:
         print("\nUsage:")
         print("  python3 pipeline.py <category> <severity> <keywords>")
         print("\nExample:")
         print("  python3 pipeline.py 'Storage Exposure' 'CRITICAL' 'PublicRead'")
+

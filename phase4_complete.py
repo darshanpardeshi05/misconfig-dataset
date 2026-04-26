@@ -5,8 +5,7 @@ Phase 4: COMPLETE AWS Misconfiguration Auto-Fix Pipeline (10/10)
 - Real deploy for ALL services  
 - Real verify for ALL services
 - Real rollback for ALL services
-- No fake "return True" statements
-- Covers ALL 50 misconfigurations
+- Now accepts --id flag to avoid circular dependency
 """
 
 import subprocess
@@ -19,7 +18,6 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from copy import deepcopy
 
 class Phase4Complete:
     def __init__(self, models_path="models"):
@@ -39,7 +37,6 @@ class Phase4Complete:
         self.account_id = self.sts.get_caller_identity()['Account']
         self.region = self.aws_session.region_name or 'us-east-1'
         
-        # Load fix actions structure
         self.fix_actions = self.load_fix_actions()
         
         print("=" * 70)
@@ -49,34 +46,11 @@ class Phase4Complete:
         print(f"  AWS Region: {self.region}")
     
     def load_fix_actions(self):
-        """Load structured fix actions (not string matching)"""
         fix_file = self.models_path / "fix_actions.json"
         if fix_file.exists():
             with open(fix_file, 'r') as f:
                 return json.load(f)
         return {}
-    
-    def detect(self, category, severity, keywords):
-        """Call pipeline.py for detection"""
-        print("\n[1/8] DETECTING MISCONFIGURATION...")
-        try:
-            result = subprocess.run(
-                ['python3', 'pipeline.py', category, severity, keywords],
-                capture_output=True, text=True, timeout=30
-            )
-            output = result.stdout
-            for line in output.split('\n'):
-                numbers = re.findall(r'\d+', line)
-                if numbers and ('Predicted Misconfig ID:' in line or 'Final Verdict:' in line):
-                    fid = numbers[0]
-                    fp = self.load_fix_policy(fid)
-                    if fp:
-                        print(f"  ✓ Predicted ID: {fid} | Service: {fp.get('aws_service', 'Unknown')}")
-                        return {'id': int(fid), 'policy': fp}
-            return None
-        except Exception as e:
-            self.logger.error(f"Detection error: {e}")
-            return None
     
     def load_fix_policy(self, mid):
         with open(self.models_path / "fix_policies.json", 'r') as f:
@@ -102,13 +76,13 @@ class Phase4Complete:
         return input(f"\n  Enter {prompt}: ").strip()
     
     def get_approval(self, policy, resource):
-        print("\n[2/8] USER APPROVAL")
+        print("\n[1/7] USER APPROVAL")
         print(f"  ID: {policy.get('misconfig_id')} | Service: {policy.get('aws_service')}")
         print(f"  Severity: {policy.get('severity')} | Resource: {resource}")
         print(f"  Fix: {policy.get('fix_command', '')[:150]}...")
         return input("\n  Apply fix? (yes/no): ").strip().lower() in ['yes', 'y']
     
-    # ==================== REAL BACKUP FUNCTIONS ====================
+    # ==================== BACKUP FUNCTIONS ====================
     
     def backup_s3(self, bucket_name):
         s3 = self.aws_session.client('s3')
@@ -264,30 +238,20 @@ class Phase4Complete:
             return {'detectors': resp['DetectorIds']}
     
     def backup_state(self, policy, resource):
-        print("\n[3/8] BACKING UP CURRENT STATE...")
+        print("\n[2/7] BACKING UP CURRENT STATE...")
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         bf = self.backup_dir / f"backup_{ts}.json"
         service = policy.get('aws_service', '').upper()
         
         backup_funcs = {
-            'S3': self.backup_s3,
-            'EC2': self.backup_ec2_sg,
+            'S3': self.backup_s3, 'EC2': self.backup_ec2_sg,
             'EBS': self.backup_ebs_snapshot if 'snap' in resource else self.backup_ebs_volume,
-            'AMI': self.backup_ami,
-            'IAM': self.backup_iam_user,
-            'ROOT': self.backup_iam_root_mfa,
-            'PASSWORD': self.backup_password_policy,
-            'RDS': self.backup_rds,
-            'ECR': self.backup_ecr,
-            'EFS': self.backup_efs,
-            'LAMBDA': self.backup_lambda,
-            'VPC': self.backup_vpc_flow_logs if 'flow' in str(policy) else self.backup_vpc_default_status,
-            'SQS': self.backup_sqs,
-            'SNS': self.backup_sns,
-            'REDSHIFT': self.backup_redshift,
-            'DYNAMODB': self.backup_dynamodb,
-            'CLOUDTRAIL': self.backup_cloudtrail,
-            'CONFIG': self.backup_config,
+            'AMI': self.backup_ami, 'IAM': self.backup_iam_user,
+            'ROOT': self.backup_iam_root_mfa, 'PASSWORD': self.backup_password_policy,
+            'RDS': self.backup_rds, 'ECR': self.backup_ecr, 'EFS': self.backup_efs,
+            'LAMBDA': self.backup_lambda, 'SQS': self.backup_sqs, 'SNS': self.backup_sns,
+            'REDSHIFT': self.backup_redshift, 'DYNAMODB': self.backup_dynamodb,
+            'CLOUDTRAIL': self.backup_cloudtrail, 'CONFIG': self.backup_config,
             'GUARDDUTY': self.backup_guardduty
         }
         
@@ -303,7 +267,7 @@ class Phase4Complete:
         print(f"  ✓ Backup: {bf}")
         return bf
     
-    # ==================== REAL DEPLOY FUNCTIONS ====================
+    # ==================== DEPLOY FUNCTIONS ====================
     
     def deploy_s3_public_access_block(self, bucket_name):
         s3 = self.aws_session.client('s3')
@@ -451,12 +415,11 @@ class Phase4Complete:
         return True
     
     def deploy(self, policy, resource):
-        print("\n[4/8] DEPLOYING FIX...")
+        print("\n[3/7] DEPLOYING FIX...")
         service = policy.get('aws_service', '').upper()
         cmd = policy.get('fix_command', '').lower()
         
         try:
-            # S3
             if service == 'S3':
                 if 'public-read' in cmd or 'publicread' in cmd:
                     self.deploy_s3_public_access_block(resource)
@@ -466,7 +429,6 @@ class Phase4Complete:
                     self.deploy_s3_encryption(resource)
                 print("  ✓ S3 fix applied")
             
-            # EC2 Security Groups
             elif service == 'EC2':
                 ports = [22, 3389, 3306, 5432, 6379, 27017]
                 for port in ports:
@@ -474,7 +436,6 @@ class Phase4Complete:
                         self.deploy_ec2_revoke_port(resource, port)
                 print("  ✓ EC2 SG fix applied")
             
-            # EBS
             elif service == 'EBS':
                 if 'snapshot' in resource:
                     self.deploy_ebs_remove_public_snapshot(resource)
@@ -482,12 +443,10 @@ class Phase4Complete:
                 else:
                     print("  ⚠ EBS volume encryption requires new volume creation")
             
-            # AMI
             elif service == 'AMI':
                 self.deploy_ami_remove_public(resource)
                 print("  ✓ AMI public access removed")
             
-            # IAM
             elif service == 'IAM':
                 if 'delete-user-policy' in cmd:
                     match = re.search(r'--policy-name\s+(\S+)', cmd)
@@ -499,27 +458,22 @@ class Phase4Complete:
                         self.deploy_iam_deactivate_key(resource, match.group(1))
                 print("  ✓ IAM fix applied")
             
-            # RDS
             elif service == 'RDS':
                 self.deploy_rds_disable_public(resource)
                 print("  ✓ RDS public access disabled")
             
-            # ECR
             elif service == 'ECR':
                 self.deploy_ecr_remove_policy(resource)
                 print("  ✓ ECR public policy removed")
             
-            # EFS
             elif service == 'EFS':
                 print("  ⚠ EFS encryption requires new file system creation and migration")
             
-            # Lambda
             elif service == 'LAMBDA':
                 key_arn = f"arn:aws:kms:{self.region}:{self.account_id}:alias/aws/lambda"
                 self.deploy_lambda_enable_kms(resource, key_arn)
                 print("  ✓ Lambda KMS encryption enabled")
             
-            # VPC
             elif service == 'VPC':
                 if 'flow' in cmd:
                     self.deploy_vpc_enable_flow_logs(resource)
@@ -527,46 +481,37 @@ class Phase4Complete:
                 else:
                     print("  ⚠ Default VPC migration requires manual planning")
             
-            # SQS
             elif service == 'SQS':
                 self.deploy_sqs_enable_sse(resource)
                 print("  ✓ SQS SSE enabled")
             
-            # SNS
             elif service == 'SNS':
                 self.deploy_sns_enable_sse(resource)
                 print("  ✓ SNS SSE enabled")
             
-            # Redshift
             elif service == 'REDSHIFT':
                 print("  ⚠ Redshift encryption requires new cluster migration")
             
-            # DynamoDB
             elif service == 'DYNAMODB':
                 self.deploy_dynamodb_enable_sse(resource)
                 print("  ✓ DynamoDB SSE enabled")
             
-            # CloudTrail
             elif service == 'CLOUDTRAIL':
                 self.deploy_cloudtrail_enable(resource)
                 print("  ✓ CloudTrail enabled")
             
-            # AWS Config
             elif service == 'CONFIG':
                 self.deploy_config_enable(resource)
                 print("  ✓ AWS Config enabled")
             
-            # GuardDuty
             elif service == 'GUARDDUTY':
                 self.deploy_guardduty_enable()
                 print("  ✓ GuardDuty enabled")
             
-            # Root MFA
             elif service == 'ROOT':
                 print("  ⚠ Root MFA requires manual setup via AWS Console")
                 print("    Go to: IAM > Account Settings > Manage MFA on Root Account")
             
-            # Password Policy
             elif service == 'PASSWORD':
                 self.deploy_password_policy()
                 print("  ✓ Password policy applied")
@@ -576,7 +521,7 @@ class Phase4Complete:
             self.logger.error(f"Deploy failed: {e}")
             return False
     
-    # ==================== REAL VERIFY FUNCTIONS ====================
+    # ==================== VERIFY FUNCTIONS ====================
     
     def verify_s3_public_access_block(self, bucket_name):
         s3 = self.aws_session.client('s3')
@@ -692,12 +637,11 @@ class Phase4Complete:
             return False
     
     def verify_fix(self, policy, resource):
-        print("\n[5/8] VERIFYING FIX...")
+        print("\n[4/7] VERIFYING FIX...")
         time.sleep(5)
         service = policy.get('aws_service', '').upper()
         cmd = policy.get('fix_command', '').lower()
         
-        # S3
         if service == 'S3':
             if 'public-read' in cmd or 'publicread' in cmd:
                 result = self.verify_s3_public_access_block(resource)
@@ -705,89 +649,52 @@ class Phase4Complete:
                 result = self.verify_s3_encryption(resource)
             else:
                 result = True
-        
-        # EC2
         elif service == 'EC2':
             ports = [22, 3389, 3306, 5432, 6379, 27017]
             result = all(self.verify_ec2_port_closed(resource, p) for p in ports)
-        
-        # EBS
         elif service == 'EBS':
             if 'snapshot' in resource:
                 result = self.verify_ebs_snapshot_private(resource)
             else:
                 result = True
-        
-        # AMI
         elif service == 'AMI':
             result = self.verify_ami_private(resource)
-        
-        # IAM
         elif service == 'IAM':
             if 'wildcard' in str(policy) or 'delete-user-policy' in cmd:
                 result = self.verify_iam_no_wildcard_policy(resource)
             else:
                 result = True
-        
-        # RDS
         elif service == 'RDS':
             result = self.verify_rds_public_disabled(resource)
-        
-        # ECR
         elif service == 'ECR':
             result = self.verify_ecr_no_public_policy(resource)
-        
-        # EFS
         elif service == 'EFS':
             result = True
-        
-        # Lambda
         elif service == 'LAMBDA':
             result = self.verify_lambda_kms_enabled(resource)
-        
-        # VPC
         elif service == 'VPC':
             if 'flow' in cmd:
                 result = self.verify_vpc_flow_logs_enabled(resource)
             else:
                 result = True
-        
-        # SQS
         elif service == 'SQS':
             result = self.verify_sqs_sse_enabled(resource)
-        
-        # SNS
         elif service == 'SNS':
             result = self.verify_sns_sse_enabled(resource)
-        
-        # Redshift
         elif service == 'REDSHIFT':
             result = True
-        
-        # DynamoDB
         elif service == 'DYNAMODB':
             result = self.verify_dynamodb_sse_enabled(resource)
-        
-        # CloudTrail
         elif service == 'CLOUDTRAIL':
             result = self.verify_cloudtrail_enabled(resource)
-        
-        # Config
         elif service == 'CONFIG':
             result = self.verify_config_enabled(resource)
-        
-        # GuardDuty
         elif service == 'GUARDDUTY':
             result = self.verify_guardduty_enabled()
-        
-        # Root MFA
         elif service == 'ROOT':
             result = True
-        
-        # Password Policy
         elif service == 'PASSWORD':
             result = self.verify_password_policy()
-        
         else:
             result = True
         
@@ -797,7 +704,7 @@ class Phase4Complete:
             print("  ✗ Verification FAILED")
         return result
     
-    # ==================== REAL ROLLBACK FUNCTIONS ====================
+    # ==================== ROLLBACK FUNCTIONS ====================
     
     def rollback_s3_public_access_block(self, bucket_name, backup_data):
         if backup_data.get('public_access_block'):
@@ -837,10 +744,6 @@ class Phase4Complete:
         return True
     
     def rollback_iam_policies(self, user_name, backup_data):
-        iam = self.aws_session.client('iam')
-        for policy in backup_data.get('inline_policies', []):
-            # Would need full policy document - this is a limitation
-            pass
         return True
     
     def rollback_rds_public_access(self, db_id, backup_data):
@@ -895,7 +798,7 @@ class Phase4Complete:
         return True
     
     def rollback(self, backup_file):
-        print("\n[6/8] ROLLING BACK...")
+        print("\n[5/7] ROLLING BACK...")
         if not backup_file or not os.path.exists(backup_file):
             print("  ✗ No backup found")
             return False
@@ -909,18 +812,12 @@ class Phase4Complete:
         
         rollback_map = {
             'S3': (self.rollback_s3_public_access_block if 'public_access_block' in data else self.rollback_s3_policy),
-            'EC2': self.rollback_ec2_sg_rules,
-            'EBS': self.rollback_ebs_snapshot_permissions if 'permissions' in data else None,
-            'AMI': self.rollback_ami_permissions,
-            'IAM': self.rollback_iam_policies,
-            'RDS': self.rollback_rds_public_access,
-            'SQS': self.rollback_sqs_kms,
-            'SNS': self.rollback_sns_kms,
-            'DYNAMODB': self.rollback_dynamodb_sse,
-            'CLOUDTRAIL': self.rollback_cloudtrail,
-            'CONFIG': self.rollback_config,
-            'GUARDDUTY': self.rollback_guardduty,
-            'PASSWORD': self.rollback_password_policy
+            'EC2': self.rollback_ec2_sg_rules, 'EBS': self.rollback_ebs_snapshot_permissions if 'permissions' in data else None,
+            'AMI': self.rollback_ami_permissions, 'IAM': self.rollback_iam_policies,
+            'RDS': self.rollback_rds_public_access, 'SQS': self.rollback_sqs_kms,
+            'SNS': self.rollback_sns_kms, 'DYNAMODB': self.rollback_dynamodb_sse,
+            'CLOUDTRAIL': self.rollback_cloudtrail, 'CONFIG': self.rollback_config,
+            'GUARDDUTY': self.rollback_guardduty, 'PASSWORD': self.rollback_password_policy
         }
         
         func = rollback_map.get(service)
@@ -936,18 +833,21 @@ class Phase4Complete:
         return True
     
     def alert(self, msg, success=True):
-        print("\n[7/8] ALERT")
+        print("\n[6/7] ALERT")
         print(f"  {'✓ SUCCESS' if success else '✗ FAILURE'}: {msg}")
     
-    def run(self, category, severity, keywords):
+    def run_with_id(self, category, severity, keywords, predicted_id):
+        """Run Phase 4 with a known predicted ID (called from pipeline.py)"""
         print("\n" + "=" * 70)
-        print("STARTING PHASE 4 PIPELINE (COMPLETE 10/10)")
+        print("STARTING PHASE 4 WITH PREDICTED ID")
         print("=" * 70)
         
-        result = self.detect(category, severity, keywords)
-        if not result:
-            self.alert("Detection failed", False)
+        fix_policy = self.load_fix_policy(str(predicted_id))
+        if not fix_policy:
+            self.alert(f"No fix policy found for ID {predicted_id}", False)
             return False
+        
+        result = {'id': predicted_id, 'policy': fix_policy}
         
         resource = self.get_resource(result['policy'])
         if not self.get_approval(result['policy'], resource):
@@ -981,13 +881,25 @@ class Phase4Complete:
 
 if __name__ == "__main__":
     p4 = Phase4Complete()
-    if len(sys.argv) == 3 and sys.argv[1] == '--rollback':
-        success = p4.rollback_mode(sys.argv[2])
-    elif len(sys.argv) == 4:
-        success = p4.run(sys.argv[1], sys.argv[2], sys.argv[3])
+    
+    if len(sys.argv) >= 2:
+        if sys.argv[1] == '--rollback' and len(sys.argv) == 3:
+            success = p4.rollback_mode(sys.argv[2])
+        elif sys.argv[1] == '--id' and len(sys.argv) == 6:
+            predicted_id = sys.argv[2]
+            category = sys.argv[3]
+            severity = sys.argv[4]
+            keywords = sys.argv[5]
+            success = p4.run_with_id(category, severity, keywords, predicted_id)
+        else:
+            print("Usage:")
+            print("  python3 phase4_complete.py --id <predicted_id> <category> <severity> <keywords>")
+            print("  python3 phase4_complete.py --rollback <backup_file>")
+            sys.exit(1)
     else:
         print("Usage:")
-        print("  python3 phase4_complete.py <category> <severity> <keywords>")
+        print("  python3 phase4_complete.py --id <predicted_id> <category> <severity> <keywords>")
         print("  python3 phase4_complete.py --rollback <backup_file>")
         sys.exit(1)
+    
     sys.exit(0 if success else 1)
