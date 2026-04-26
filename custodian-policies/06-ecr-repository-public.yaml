@@ -19,7 +19,3 @@ policies:
   - type: value
     key: tag:Misconfiguration
     value: ECR-001
-  actions:
-  - type: notify
-    template: default
-    priority: info

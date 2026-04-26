@@ -20,7 +20,3 @@ policies:
   - type: value
     key: tag:Misconfiguration
     value: DYNAMODB-001
-  actions:
-  - type: notify
-    template: default
-    priority: info

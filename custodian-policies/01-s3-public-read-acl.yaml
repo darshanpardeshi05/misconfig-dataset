@@ -17,7 +17,3 @@ policies:
   - type: value
     key: tag:Misconfiguration
     value: S3-001
-  actions:
-  - type: notify
-    template: default
-    priority: info

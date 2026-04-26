@@ -21,7 +21,3 @@ policies:
   - type: value
     key: tag:Misconfiguration
     value: SG-003
-  actions:
-  - type: notify
-    template: default
-    priority: info

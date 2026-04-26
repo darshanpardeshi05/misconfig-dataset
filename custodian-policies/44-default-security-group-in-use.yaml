@@ -20,7 +20,3 @@ policies:
   - type: value
     key: tag:Misconfiguration
     value: EC2-002
-  actions:
-  - type: notify
-    template: default
-    priority: info

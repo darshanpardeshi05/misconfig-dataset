@@ -18,7 +18,3 @@ policies:
   - type: value
     key: tag:Misconfiguration
     value: EFS-001
-  actions:
-  - type: notify
-    template: default
-    priority: info

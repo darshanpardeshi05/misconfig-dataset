@@ -22,7 +22,3 @@ policies:
   - type: value
     key: tag:Misconfiguration
     value: LAMBDA-001
-  actions:
-  - type: notify
-    template: default
-    priority: info
