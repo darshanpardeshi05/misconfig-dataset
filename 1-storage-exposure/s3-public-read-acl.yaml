@@ -1,33 +1,29 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: MISCONFIGURATION - S3 bucket with PublicRead ACL
+Description: MISCONFIGURATION - S3 bucket with public read access via bucket policy (updated for modern S3)
 
-# METADATA - For research tracking and automated detection
 Metadata:
   Misconfiguration:
     Category: "Storage-Exposure"
     Severity: "CRITICAL"
     RuleId: "S3-001"
-    Description: "S3 bucket allows public read access via ACL"
-    Remediation: "Set AccessControl to Private and enable BlockPublicAccess"
+    Description: "S3 bucket allows public read access via bucket policy"
+    Remediation: "Remove public bucket policy and enable BlockPublicAccess"
     Keywords:
       - "PublicRead"
       - "S3 Public"
-      - "Public ACL"
+      - "Bucket Policy"
       - "BlockPublicAccess disabled"
-      - "S3 bucket public"
+      - "s3:GetObject"
     ML_Label: "misconfiguration"
 
 Resources:
   PublicBucket:
     Type: AWS::S3::Bucket
     Properties:
-      
-      # Unique bucket name to avoid global conflicts
       BucketName: !Sub "s3-public-read-${AWS::AccountId}-${AWS::StackName}"
       
-      # MISCONFIGURATION: Public read access enabled
-      AccessControl: PublicRead
-
+      # Remove AccessControl - not allowed with BucketOwnerEnforced
+      
       # MISCONFIGURATION: Block Public Access disabled
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
@@ -35,7 +31,10 @@ Resources:
         IgnorePublicAcls: false
         RestrictPublicBuckets: false
 
-      # Tags used for filtering, classification, and mapping
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+
       Tags:
         - Key: Name
           Value: "S3-Public-Read-Bucket"
@@ -48,6 +47,18 @@ Resources:
         - Key: Batch
           Value: "Batch-1"
 
+  PublicBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PublicBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: "*"
+            Action: "s3:GetObject"
+            Resource: !Sub "${PublicBucket.Arn}/*"
+
 Outputs:
   BucketName:
     Description: "Name of the publicly accessible S3 bucket"
@@ -55,12 +66,8 @@ Outputs:
 
   Risk:
     Description: "Security Risk"
-    Value: "This bucket allows public read access. Anyone on the internet can read all objects."
+    Value: "This bucket allows public read access via bucket policy. Anyone on the internet can read all objects."
 
   FixCommand:
     Description: "Remediation Command"
-    Value: |
-      aws s3api put-public-access-block \
-        --bucket <BUCKET_NAME> \
-        --public-access-block-configuration \
-        BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+    Value: !Sub "aws s3api delete-bucket-policy --bucket ${PublicBucket}"
