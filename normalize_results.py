@@ -62,18 +62,27 @@ class ResultsNormalizer:
             data = json.load(f)
         
         count = 0
-        findings = data.get('findings', data.get('results', []))
+        if isinstance(data, list):
+            findings = data
+        else:
+            findings = data.get('findings', data.get('results', []))
         
         for finding in findings:
-            description = finding.get('description', finding.get('check_title', str(finding)))
-            severity = finding.get('severity', finding.get('risk', 'MEDIUM'))
+            description = finding.get('message', finding.get('description', str(finding)))
+            severity = finding.get('severity', 'MEDIUM')
+            
+            resource = 'Unknown'
+            if 'unmapped' in finding and 'resource_name' in finding['unmapped']:
+                resource = finding['unmapped']['resource_name']
+            elif 'resource_id' in finding:
+                resource = finding['resource_id']
             
             finding_data = {
                 'tool': 'prowler',
                 'category': self.extract_category_from_text(description),
                 'severity': self.extract_severity(severity),
                 'description': description[:500],
-                'resource': finding.get('resource_id', finding.get('resource_name', 'Unknown')),
+                'resource': resource,
                 'raw_data': finding
             }
             self.all_findings.append(finding_data)
@@ -96,15 +105,38 @@ class ResultsNormalizer:
         services = data.get('services', {})
         
         for service_name, service_data in services.items():
-            if 'findings' in service_data:
-                for finding in service_data['findings']:
+            if not isinstance(service_data, dict):
+                continue
+            
+            # Look for findings in the service data
+            for key, value in service_data.items():
+                if key == 'findings' and isinstance(value, list):
+                    for finding in value:
+                        if isinstance(finding, dict):
+                            desc = finding.get('description', str(finding))
+                        else:
+                            desc = str(finding)
+                        
+                        finding_data = {
+                            'tool': 'scoutsuite',
+                            'category': self.extract_category_from_text(service_name),
+                            'severity': self.extract_severity(desc),
+                            'description': f"{service_name}: {desc[:200]}",
+                            'resource': finding.get('resource_name', service_name) if isinstance(finding, dict) else service_name,
+                            'raw_data': finding
+                        }
+                        self.all_findings.append(finding_data)
+                        count += 1
+                
+                # Also check for resources with flags/issues
+                if isinstance(value, dict) and ('flags' in value or 'issues' in value):
                     finding_data = {
                         'tool': 'scoutsuite',
                         'category': self.extract_category_from_text(service_name),
-                        'severity': self.extract_severity(str(finding)),
-                        'description': f"{service_name}: {finding.get('description', 'Issue found')}",
-                        'resource': finding.get('resource_name', service_name),
-                        'raw_data': finding
+                        'severity': 'MEDIUM',
+                        'description': f"{service_name}: Issue detected in {key}",
+                        'resource': key,
+                        'raw_data': value
                     }
                     self.all_findings.append(finding_data)
                     count += 1
@@ -120,12 +152,15 @@ class ResultsNormalizer:
             return
         
         count = 0
-        policy_folders = glob.glob(str(custodian_dir / "*/resources.json"))
+        resources_files = list(custodian_dir.glob("*/resources.json")) + list(custodian_dir.glob("*/*/resources.json"))
         
-        for resources_file in policy_folders:
-            folder_name = Path(resources_file).parent.name
-            with open(resources_file, 'r') as f:
-                resources = json.load(f)
+        for resources_file in resources_files:
+            folder_name = resources_file.parent.name
+            try:
+                with open(resources_file, 'r') as f:
+                    resources = json.load(f)
+            except:
+                continue
             
             if resources and len(resources) > 0:
                 parts = folder_name.split('-')
@@ -144,13 +179,17 @@ class ResultsNormalizer:
                 except:
                     pass
                 
+                resource_name = "Unknown"
+                if resources and len(resources) > 0:
+                    resource_name = resources[0].get('Name', resources[0].get('RepositoryName', str(resources[0])))
+                
                 finding_data = {
                     'tool': 'custodian',
                     'misconfig_id': policy_id,
                     'category': category,
                     'severity': severity,
                     'description': f"Misconfiguration detected by policy {folder_name}",
-                    'resource': resources[0].get('name', resources[0].get('RepositoryName', str(resources[0]))),
+                    'resource': resource_name,
                     'raw_data': resources
                 }
                 self.all_findings.append(finding_data)
@@ -187,4 +226,3 @@ if __name__ == "__main__":
     normalizer = ResultsNormalizer()
     output_file = normalizer.run()
     print(f"\nNext step: Run preprocess_and_run.py")
-
