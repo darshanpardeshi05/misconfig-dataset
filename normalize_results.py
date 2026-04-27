@@ -2,6 +2,7 @@
 """
 Normalize Results from Prowler, ScoutSuite, and Custodian
 Combines all findings into a single unified JSON format
+Supports ALL 50 misconfigurations from ALL 3 tools
 """
 
 import json
@@ -26,10 +27,10 @@ class ResultsNormalizer:
         text_lower = text.lower()
         categories = {
             'storage-exposure': ['s3', 'ebs', 'rds', 'ecr', 'ami', 'efs', 'bucket', 'snapshot', 'repository', 'volume'],
-            'iam-over-permission': ['iam', 'role', 'policy', 'user', 'access key', 'mfa', 'administrator'],
-            'network-oversights': ['security group', 'sg', 'vpc', 'flow logs', 'port', 'ssh', 'rdp', 'mysql'],
+            'iam-over-permission': ['iam', 'role', 'policy', 'user', 'access key', 'mfa', 'administrator', 'wildcard'],
+            'network-oversights': ['security group', 'sg', 'vpc', 'flow logs', 'port', 'ssh', 'rdp', 'mysql', 'postgres', 'redis', 'mongodb'],
             'lack-of-encryption': ['encryption', 'encrypted', 'sse', 'kms', 'plaintext'],
-            'insecure-defaults': ['default', 'cloudtrail', 'config', 'guardduty', 'password policy']
+            'insecure-defaults': ['default', 'cloudtrail', 'config', 'guardduty', 'password policy', 'credential report']
         }
         
         for category, keywords in categories.items():
@@ -104,42 +105,73 @@ class ResultsNormalizer:
         count = 0
         services = data.get('services', {})
         
+        # Process each service
         for service_name, service_data in services.items():
             if not isinstance(service_data, dict):
                 continue
             
-            # Look for findings in the service data
-            for key, value in service_data.items():
-                if key == 'findings' and isinstance(value, list):
-                    for finding in value:
-                        if isinstance(finding, dict):
-                            desc = finding.get('description', str(finding))
-                        else:
-                            desc = str(finding)
+            # Look for buckets/s3 specific findings
+            if service_name == 's3' and 'buckets' in service_data:
+                for bucket_name, bucket_info in service_data['buckets'].items():
+                    if isinstance(bucket_info, dict):
+                        # Check for public access
+                        if bucket_info.get('publicly_accessible', False):
+                            finding_data = {
+                                'tool': 'scoutsuite',
+                                'category': 'Storage Exposure',
+                                'severity': 'HIGH',
+                                'description': f"S3 bucket '{bucket_name}' is publicly accessible",
+                                'resource': bucket_name,
+                                'raw_data': bucket_info
+                            }
+                            self.all_findings.append(finding_data)
+                            count += 1
                         
+                        # Check ACL
+                        if 'acl' in bucket_info:
+                            acl = bucket_info['acl']
+                            if acl.get('public_read', False) or acl.get('public_write', False):
+                                finding_data = {
+                                    'tool': 'scoutsuite',
+                                    'category': 'Storage Exposure',
+                                    'severity': 'HIGH',
+                                    'description': f"S3 bucket '{bucket_name}' has public ACL",
+                                    'resource': bucket_name,
+                                    'raw_data': bucket_info
+                                }
+                                self.all_findings.append(finding_data)
+                                count += 1
+                        
+                        # Check policy
+                        if 'policy' in bucket_info and bucket_info['policy']:
+                            policy_str = str(bucket_info['policy']).lower()
+                            if 'principal' in policy_str and '*' in policy_str:
+                                finding_data = {
+                                    'tool': 'scoutsuite',
+                                    'category': 'Storage Exposure',
+                                    'severity': 'HIGH',
+                                    'description': f"S3 bucket '{bucket_name}' has public bucket policy",
+                                    'resource': bucket_name,
+                                    'raw_data': bucket_info
+                                }
+                                self.all_findings.append(finding_data)
+                                count += 1
+            
+            # Process findings from any service
+            if 'findings' in service_data:
+                for finding in service_data['findings']:
+                    if isinstance(finding, dict):
+                        desc = finding.get('description', str(finding))
                         finding_data = {
                             'tool': 'scoutsuite',
                             'category': self.extract_category_from_text(service_name),
-                            'severity': self.extract_severity(desc),
+                            'severity': self.extract_severity(str(finding)),
                             'description': f"{service_name}: {desc[:200]}",
-                            'resource': finding.get('resource_name', service_name) if isinstance(finding, dict) else service_name,
+                            'resource': finding.get('resource_name', service_name),
                             'raw_data': finding
                         }
                         self.all_findings.append(finding_data)
                         count += 1
-                
-                # Also check for resources with flags/issues
-                if isinstance(value, dict) and ('flags' in value or 'issues' in value):
-                    finding_data = {
-                        'tool': 'scoutsuite',
-                        'category': self.extract_category_from_text(service_name),
-                        'severity': 'MEDIUM',
-                        'description': f"{service_name}: Issue detected in {key}",
-                        'resource': key,
-                        'raw_data': value
-                    }
-                    self.all_findings.append(finding_data)
-                    count += 1
         
         print(f"  Processed {count} findings from ScoutSuite")
     
@@ -152,7 +184,10 @@ class ResultsNormalizer:
             return
         
         count = 0
-        resources_files = list(custodian_dir.glob("*/resources.json")) + list(custodian_dir.glob("*/*/resources.json"))
+        # Find all resources.json files (handles both flat and nested structures)
+        resources_files = []
+        resources_files.extend(custodian_dir.glob("*/resources.json"))
+        resources_files.extend(custodian_dir.glob("*/*/resources.json"))
         
         for resources_file in resources_files:
             folder_name = resources_file.parent.name
@@ -162,10 +197,12 @@ class ResultsNormalizer:
             except:
                 continue
             
-            if resources and len(resources) > 0:
+            if resources and len(resources) > 0 and resources != []:
+                # Extract policy ID from folder name
                 parts = folder_name.split('-')
                 policy_id = parts[0] if parts[0].isdigit() else "00"
                 
+                # Look up category and severity from fix_policies.json
                 category = "Unknown"
                 severity = "MEDIUM"
                 try:
@@ -179,9 +216,10 @@ class ResultsNormalizer:
                 except:
                     pass
                 
+                # Get resource name
                 resource_name = "Unknown"
                 if resources and len(resources) > 0:
-                    resource_name = resources[0].get('Name', resources[0].get('RepositoryName', str(resources[0])))
+                    resource_name = resources[0].get('Name', resources[0].get('RepositoryName', resources[0].get('name', str(resources[0]))))
                 
                 finding_data = {
                     'tool': 'custodian',
