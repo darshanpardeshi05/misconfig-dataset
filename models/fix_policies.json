@@ -126,11 +126,10 @@
     "severity": "HIGH",
     "description": "IAM policy allows ALL actions (*) which violates least privilege",
     "remediation": "Restrict actions to only required services",
-    "keywords": ["Action *", "iam wildcard action", "over permissive policy", "Effect Allow Resource *", "full access policy"],
-    "fix_command": "aws iam delete-user-policy --user-name <USER_NAME> --policy-name <POLICY_NAME>",
+    "fix_command": "aws iam list-user-policies --user-name <USER_NAME> --query 'PolicyNames[0]' --output text | xargs -I {} aws iam delete-user-policy --user-name <USER_NAME> --policy-name {}",
     "aws_service": "IAM",
     "aws_action": "delete-user-policy"
-  },
+  }, 
   "12": {
     "misconfig_id": 12,
     "rule_id": "IAM-002",
