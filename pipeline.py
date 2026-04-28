@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 """
 Complete Pipeline for AWS Misconfiguration Detection
-Includes: Keyword Matching + Random Forest + XGBoost + Isolation Forest
-Phase 3 only - Run Phase 4 manually after this
+Phase 3 only - Prioritizes Keyword Match over XGBoost
 """
 
 import joblib
 import pandas as pd
-import numpy as np
 import json
 import sys
 import re
 from pathlib import Path
-from difflib import get_close_matches
 
 class MisconfigDetectionPipeline:
     def __init__(self, models_path="models"):
@@ -22,37 +19,25 @@ class MisconfigDetectionPipeline:
         print("LOADING MISCONFIGURATION DETECTION PIPELINE (PHASE 3)")
         print("=" * 60)
         
-        print("\n[1/8] Loading keyword mapping...")
+        print("\n[1/6] Loading keyword mapping...")
         with open(self.models_path / "keywords.json", 'r') as f:
             self.keyword_mapping = json.load(f)
         self.create_inverted_keyword_index()
         print(f"  OK Loaded {len(self.keyword_mapping)} misconfigurations")
         
-        print("[2/8] Loading Random Forest model...")
-        self.rf_model = joblib.load(self.models_path / "random_forest.pkl")
-        print("  OK Random Forest loaded")
-        
-        print("[3/8] Loading Isolation Forest model...")
-        self.if_model = joblib.load(self.models_path / "isolation_forest.pkl")
-        print("  OK Isolation Forest loaded")
-        
-        print("[4/8] Loading XGBoost model...")
+        print("[2/6] Loading XGBoost model...")
         self.xgb_model = joblib.load(self.models_path / "xgboost_model.pkl")
         print("  OK XGBoost loaded")
         
-        print("[5/8] Loading XGBoost label encoder...")
+        print("[3/6] Loading XGBoost label encoder...")
         self.xgb_label_encoder = joblib.load(self.models_path / "xgboost_train_label_encoder.pkl")
         print("  OK XGBoost label encoder loaded")
         
-        print("[6/8] Loading XGBoost feature encoders...")
+        print("[4/6] Loading XGBoost feature encoders...")
         self.xgb_feature_encoders = joblib.load(self.models_path / "xgboost_feature_encoders.pkl")
         print("  OK XGBoost feature encoders loaded")
         
-        print("[7/8] Loading vectorizer...")
-        self.vectorizer = joblib.load(self.models_path / "vectorizer.pkl")
-        print("  OK Vectorizer loaded")
-        
-        print("[8/8] Loading fix policies...")
+        print("[5/6] Loading fix policies...")
         with open(self.models_path / "fix_policies.json", 'r') as f:
             self.fix_policies = json.load(f)
         print(f"  OK Loaded {len(self.fix_policies)} fix policies")
@@ -92,33 +77,28 @@ class MisconfigDetectionPipeline:
         
         best_match = max(matches, key=matches.get)
         confidence = matches[best_match] / len(input_keywords_lower)
-        
         return best_match, confidence
     
-    def preprocess_for_xgboost(self, category, severity, keywords):
-        input_df = pd.DataFrame({
-            'category': [category],
-            'severity': [severity],
-            'keywords': [keywords]
-        })
-        
+    def predict_xgboost(self, category, severity, keywords):
         try:
-            input_df['category'] = self.xgb_feature_encoders['category'].transform(input_df['category'])
-            input_df['severity'] = self.xgb_feature_encoders['severity'].transform(input_df['severity'])
-            input_df['keywords'] = self.xgb_feature_encoders['keywords'].transform(input_df['keywords'])
-        except ValueError as e:
-            print(f"  Warning: Cannot encode input. Error: {e}")
+            cat_enc = self.xgb_feature_encoders['category'].transform([category])[0]
+            sev_enc = self.xgb_feature_encoders['severity'].transform([severity])[0]
+            kw_enc = self.xgb_feature_encoders['keywords'].transform([keywords])[0]
+            
+            input_df = pd.DataFrame([[cat_enc, sev_enc, kw_enc]], 
+                                   columns=['category_encoded', 'severity_encoded', 'keyword_encoded'])
+            
+            pred_encoded = self.xgb_model.predict(input_df)
+            pred_original = self.xgb_label_encoder.inverse_transform(pred_encoded)
+            result = pred_original[0]
+            if isinstance(result, str):
+                numbers = re.findall(r'\d+', result)
+                if numbers:
+                    return int(numbers[0])
+            return int(result)
+        except Exception as e:
+            print(f"  XGBoost prediction failed: {e}")
             return None
-        
-        return input_df
-    
-    def predict_xgboost(self, encoded_input):
-        if encoded_input is None:
-            return None
-        
-        pred_encoded = self.xgb_model.predict(encoded_input)
-        pred_original = self.xgb_label_encoder.inverse_transform(pred_encoded)
-        return int(pred_original[0])
     
     def predict(self, category, severity, keywords):
         print("\n" + "-" * 40)
@@ -127,49 +107,51 @@ class MisconfigDetectionPipeline:
         print(f"Input: category={category}, severity={severity}")
         print(f"Keywords: {keywords[:100]}...")
         
-        result = {
-            "input": {"category": category, "severity": severity, "keywords": keywords},
-            "final_verdict": None
-        }
+        keyword_id = None
+        keyword_confidence = 0
+        xgboost_id = None
         
-        print("\n[1/4] Keyword Matching...")
+        print("\n[1/3] Keyword Matching...")
         matched_file, confidence = self.keyword_match([keywords] + keywords.split())
         if matched_file:
-            matched_id = self.file_to_index.get(matched_file)
-            print(f"  Matched: {matched_file} (ID: {matched_id}, Confidence: {confidence:.2f})")
-            final_id = matched_id
+            keyword_id = self.file_to_index.get(matched_file)
+            keyword_confidence = confidence
+            print(f"  Matched: {matched_file} (ID: {keyword_id}, Confidence: {confidence:.2f})")
         else:
             print("  No keyword match found")
-            final_id = None
         
-        print("\n[2/4] Preprocessing for ML models...")
-        encoded_input = self.preprocess_for_xgboost(category, severity, keywords)
-        
-        print("\n[3/4] Running ML predictions...")
-        xgb_pred = self.predict_xgboost(encoded_input)
-        if xgb_pred:
-            print(f"  XGBoost Prediction: Misconfig ID = {xgb_pred}")
-            final_id = xgb_pred
+        print("\n[2/3] Running XGBoost prediction...")
+        xgboost_id = self.predict_xgboost(category, severity, keywords)
+        if xgboost_id:
+            print(f"  XGBoost Prediction: Misconfig ID = {xgboost_id}")
         
         print("\n" + "-" * 40)
         print("FINAL VERDICT")
         print("-" * 40)
         
+        # Prioritize keyword match when confidence is high (>= 0.5)
+        final_id = None
+        if keyword_id and keyword_confidence >= 0.5:
+            final_id = keyword_id
+            print(f"  Using Keyword Match result (Confidence: {keyword_confidence:.2f})")
+        elif xgboost_id:
+            final_id = xgboost_id
+            print(f"  Using XGBoost result (Keyword match confidence too low)")
+        elif keyword_id:
+            final_id = keyword_id
+            print(f"  Using Keyword Match result (low confidence fallback)")
+        
         if final_id:
-            result["final_verdict"] = final_id
-            print(f"Predicted Misconfig ID: {final_id}")
+            print(f"\nPredicted Misconfig ID: {final_id}")
+            fix_policy = self.fix_policies.get(str(final_id))
+            if fix_policy:
+                print(f"\nFix Policy:")
+                print(f"  Remediation: {fix_policy.get('remediation', 'N/A')[:100]}...")
+                print(f"  Service: {fix_policy.get('aws_service', 'N/A')}")
+            return final_id
         else:
             print("ERROR: Could not identify misconfiguration")
-            return result
-        
-        # Get fix policy
-        fix_policy = self.fix_policies.get(str(final_id))
-        if fix_policy:
-            print(f"\nFix Policy:")
-            print(f"  Remediation: {fix_policy.get('remediation', 'N/A')[:100]}...")
-            print(f"  Service: {fix_policy.get('aws_service', 'N/A')}")
-        
-        return result
+            return None
 
 
 if __name__ == "__main__":
@@ -180,15 +162,15 @@ if __name__ == "__main__":
         severity = sys.argv[2]
         keywords = sys.argv[3]
         
-        result = pipeline.predict(category, severity, keywords)
+        result_id = pipeline.predict(category, severity, keywords)
         
         print("\n" + "=" * 60)
         print("PHASE 3 COMPLETE")
         print("=" * 60)
-        print(f"Final Verdict: Misconfig ID {result['final_verdict']}")
+        print(f"Final Verdict: Misconfig ID {result_id}")
         print("\n" + "=" * 60)
         print("NEXT STEP: Run Phase 4 manually:")
-        print(f"  python3 phase4_complete.py --id {result['final_verdict']} \"{category}\" \"{severity}\" \"{keywords}\"")
+        print(f"  python3 phase4_complete.py --id {result_id} \"{category}\" \"{severity}\" \"{keywords}\"")
         print("=" * 60)
         
     else:
