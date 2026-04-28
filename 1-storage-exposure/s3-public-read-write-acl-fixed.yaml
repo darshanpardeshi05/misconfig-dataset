@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MISCONFIGURATION - S3 bucket with public read/write access via bucket policy
+
+Metadata:
+  Misconfiguration:
+    Category: "Storage-Exposure"
+    Severity: "CRITICAL"
+    RuleId: "S3-002"
+    Description: "S3 bucket allows public read AND write access via bucket policy"
+    Remediation: "Remove public bucket policy and enable BlockPublicAccess"
+    Keywords:
+      - "PublicReadWrite"
+      - "S3 Public Write"
+      - "Anyone can upload"
+      - "BlockPublicAccess disabled"
+    ML_Label: "misconfiguration"
+
+Resources:
+  PublicReadWriteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "s3-rw-${AWS::AccountId}-${AWS::StackName}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      Tags:
+        - Key: Name
+          Value: "S3-Public-ReadWrite-Bucket"
+        - Key: Misconfiguration
+          Value: "S3-002"
+        - Key: Category
+          Value: "Storage-Exposure"
+        - Key: Severity
+          Value: "CRITICAL"
+
+  PublicBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PublicReadWriteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: "*"
+            Action: 
+              - "s3:GetObject"
+              - "s3:PutObject"
+              - "s3:DeleteObject"
+            Resource: !Sub "${PublicReadWriteBucket.Arn}/*"
+
+Outputs:
+  BucketName:
+    Description: "Name of the publicly accessible S3 bucket"
+    Value: !Ref PublicReadWriteBucket
+  Risk:
+    Description: "Security Risk"
+    Value: "This bucket allows public read and write access"
+  FixCommand:
+    Description: "Remediation Command"
+    Value: !Sub "aws s3api delete-bucket-policy --bucket ${PublicReadWriteBucket} && aws s3api put-public-access-block --bucket ${PublicReadWriteBucket} --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
