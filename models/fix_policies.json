@@ -6,8 +6,7 @@
     "severity": "CRITICAL",
     "description": "S3 bucket allows public read access via ACL",
     "remediation": "Set AccessControl to Private and enable BlockPublicAccess",
-    "keywords": ["PublicRead", "S3 Public", "Public ACL", "BlockPublicAccess disabled", "S3 bucket public"],
-    "fix_command": "aws s3api put-public-access-block --bucket <BUCKET_NAME> --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true",
+    "fix_command": "aws s3api put-public-access-block --bucket <BUCKET_NAME> --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true && aws s3api delete-bucket-policy --bucket <BUCKET_NAME>",
     "aws_service": "S3",
     "aws_action": "put-public-access-block"
   },
@@ -18,7 +17,6 @@
     "severity": "CRITICAL",
     "description": "S3 bucket allows public read AND write access via ACL",
     "remediation": "Set AccessControl to Private and enable BlockPublicAccess",
-    "keywords": ["PublicReadWrite", "S3 Public Write", "Public ACL Write", "Anyone can upload", "BlockPublicAccess disabled"],
     "fix_command": "aws s3api put-public-access-block --bucket <BUCKET_NAME> --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true",
     "aws_service": "S3",
     "aws_action": "put-public-access-block"
@@ -30,7 +28,6 @@
     "severity": "HIGH",
     "description": "S3 bucket has Block Public Access completely disabled, allowing future public exposure",
     "remediation": "Enable Block Public Access for the bucket or at account level",
-    "keywords": ["BlockPublicAccess disabled", "PublicAccessBlock false", "S3 no protection", "Public policy allowed", "Public ACL allowed"],
     "fix_command": "aws s3api put-public-access-block --bucket <BUCKET_NAME> --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true",
     "aws_service": "S3",
     "aws_action": "put-public-access-block"
@@ -42,7 +39,6 @@
     "severity": "CRITICAL",
     "description": "EBS snapshot is shared publicly with all AWS accounts",
     "remediation": "Modify snapshot permissions to private or specific accounts only",
-    "keywords": ["EBS snapshot public", "createVolumePermission all", "snapshot shared", "public snapshot", "unencrypted snapshot"],
     "fix_command": "aws ec2 modify-snapshot-attribute --snapshot-id <SNAPSHOT_ID> --attribute createVolumePermission --operation-type remove --group-names all",
     "aws_service": "EC2",
     "aws_action": "modify-snapshot-attribute"
@@ -54,7 +50,6 @@
     "severity": "CRITICAL",
     "description": "RDS snapshot is shared publicly with all AWS accounts",
     "remediation": "Modify snapshot permissions to private or specific accounts only",
-    "keywords": ["RDS snapshot public", "modify-db-snapshot-attribute", "restore all", "public database snapshot", "unencrypted RDS"],
     "fix_command": "aws rds modify-db-snapshot-attribute --db-snapshot-identifier <SNAPSHOT_ID> --attribute-name restore --values-to-remove all",
     "aws_service": "RDS",
     "aws_action": "modify-db-snapshot-attribute"
@@ -66,7 +61,6 @@
     "severity": "HIGH",
     "description": "ECR repository allows public pull access (anyone can pull images without authentication)",
     "remediation": "Restrict repository policy to specific IAM principals and enable image scanning",
-    "keywords": ["ECR public", "Principal *", "public repository", "docker pull public", "ScanOnPush false"],
     "fix_command": "aws ecr set-repository-policy --repository-name <REPO_NAME> --policy-text '{}'",
     "aws_service": "ECR",
     "aws_action": "set-repository-policy"
@@ -78,7 +72,6 @@
     "severity": "CRITICAL",
     "description": "AMI is shared publicly with all AWS accounts (anyone can launch EC2 instances from this image)",
     "remediation": "Modify AMI permissions to private or specific accounts only",
-    "keywords": ["AMI public", "modify-image-attribute", "launchPermission all", "public AMI", "shared image"],
     "fix_command": "aws ec2 modify-image-attribute --image-id <AMI_ID> --launch-permission Remove=[{Group=all}]",
     "aws_service": "EC2",
     "aws_action": "modify-image-attribute"
@@ -90,7 +83,6 @@
     "severity": "HIGH",
     "description": "EFS file system has mount target in public subnet with security group allowing NFS from anywhere",
     "remediation": "Move mount target to private subnet and restrict NFS access",
-    "keywords": ["EFS public", "NFS 2049 open", "mount target public", "0.0.0.0/0", "unencrypted EFS"],
     "fix_command": "aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 2049 --cidr 0.0.0.0/0",
     "aws_service": "EC2",
     "aws_action": "revoke-security-group-ingress"
@@ -102,7 +94,6 @@
     "severity": "CRITICAL",
     "description": "S3 bucket policy uses Principal '*' which grants access to anyone on the internet",
     "remediation": "Remove public policy and restrict access to specific IAM principals",
-    "keywords": ["Principal *", "S3 public policy", "bucket policy public", "s3:GetObject public", "BlockPublicPolicy false"],
     "fix_command": "aws s3api delete-bucket-policy --bucket <BUCKET_NAME>",
     "aws_service": "S3",
     "aws_action": "delete-bucket-policy"
@@ -114,7 +105,6 @@
     "severity": "HIGH",
     "description": "Individual S3 object has public read ACL even though bucket is private",
     "remediation": "Remove public-read ACL from object",
-    "keywords": ["s3 object acl public", "public-read object", "PutObjectAcl", "object level exposure", "s3 object public"],
     "fix_command": "aws s3api put-object-acl --bucket <BUCKET_NAME> --key <OBJECT_KEY> --acl private",
     "aws_service": "S3",
     "aws_action": "put-object-acl"
@@ -129,7 +119,7 @@
     "fix_command": "aws iam list-user-policies --user-name <USER_NAME> --query 'PolicyNames[0]' --output text | xargs -I {} aws iam delete-user-policy --user-name <USER_NAME> --policy-name {}",
     "aws_service": "IAM",
     "aws_action": "delete-user-policy"
-  }, 
+  },
   "12": {
     "misconfig_id": 12,
     "rule_id": "IAM-002",
@@ -137,7 +127,6 @@
     "severity": "HIGH",
     "description": "IAM policy allows access to ALL resources (*) which is overly permissive",
     "remediation": "Restrict Resource to specific ARNs",
-    "keywords": ["Resource *", "iam wildcard resource", "over permissive resource", "s3 all buckets access", "Resource star"],
     "fix_command": "aws iam delete-user-policy --user-name <USER_NAME> --policy-name <POLICY_NAME>",
     "aws_service": "IAM",
     "aws_action": "delete-user-policy"
@@ -149,7 +138,6 @@
     "severity": "CRITICAL",
     "description": "IAM policy grants full administrative access using Action '*' and Resource '*'",
     "remediation": "Remove policy and enforce least-privilege access",
-    "keywords": ["Action * Resource *", "full admin policy", "iam full access", "over permissive iam", "administrator equivalent"],
     "fix_command": "aws iam delete-user-policy --user-name <USER_NAME> --policy-name <POLICY_NAME>",
     "aws_service": "IAM",
     "aws_action": "delete-user-policy"
@@ -161,7 +149,6 @@
     "severity": "CRITICAL",
     "description": "IAM role has AdministratorAccess managed policy attached, granting full admin permissions",
     "remediation": "Detach AdministratorAccess and apply least-privilege policies",
-    "keywords": ["AdministratorAccess", "iam admin role", "managed policy admin", "full access role", "iam role over permissive"],
     "fix_command": "aws iam detach-role-policy --role-name <ROLE_NAME> --policy-arn arn:aws:iam::aws:policy/AdministratorAccess",
     "aws_service": "IAM",
     "aws_action": "detach-role-policy"
@@ -173,7 +160,6 @@
     "severity": "HIGH",
     "description": "IAM user has s3:* permission - can perform ANY S3 action on ANY S3 resource in the account",
     "remediation": "Replace s3:* with specific actions and restrict to specific bucket ARNs",
-    "keywords": ["s3:*", "Action: s3:*", "arn:aws:s3:::*", "Effect: Allow"],
     "fix_command": "aws iam delete-user-policy --user-name <USER_NAME> --policy-name <POLICY_NAME>",
     "aws_service": "IAM",
     "aws_action": "delete-user-policy"
@@ -185,7 +171,6 @@
     "severity": "HIGH",
     "description": "IAM user has ec2:* permission - can perform ANY EC2 action on ANY EC2 resource in the account",
     "remediation": "Replace ec2:* with least privilege actions and restrict to specific resources",
-    "keywords": ["ec2:*", "Action: ec2:*", "Resource: *", "ec2:RunInstances", "ec2:TerminateInstances"],
     "fix_command": "aws iam delete-user-policy --user-name <USER_NAME> --policy-name <POLICY_NAME>",
     "aws_service": "IAM",
     "aws_action": "delete-user-policy"
@@ -197,7 +182,6 @@
     "severity": "CRITICAL",
     "description": "AWS Root account does not have MFA enabled",
     "remediation": "Enable MFA on root account immediately",
-    "keywords": ["RootMFAEnabled", "Root without MFA", "AccountMFAEnabled", "VirtualMFADevice"],
     "fix_command": "Manual fix required: Enable MFA via AWS Console > IAM > Account Settings > Manage MFA",
     "aws_service": "IAM",
     "aws_action": "enable-mfa"
@@ -209,7 +193,6 @@
     "severity": "HIGH",
     "description": "IAM user does not have MFA (Multi-Factor Authentication) enabled",
     "remediation": "Enable MFA for the IAM user using Virtual MFA device",
-    "keywords": ["MFADevice", "VirtualMFADevice", "User without MFA", "LoginProfile", "aws:MultiFactorAuthPresent"],
     "fix_command": "aws iam create-virtual-mfa-device --virtual-mfa-device-name <DEVICE_NAME> --outfile path/to/qrcode.png",
     "aws_service": "IAM",
     "aws_action": "create-virtual-mfa-device"
@@ -221,7 +204,6 @@
     "severity": "MEDIUM",
     "description": "IAM user is inactive but still has active credentials",
     "remediation": "Delete inactive IAM users or disable credentials",
-    "keywords": ["Inactive user", "AccessKey Active", "Orphaned account", "LoginProfile", "Unused credentials"],
     "fix_command": "aws iam update-access-key --user-name <USER_NAME> --access-key-id <KEY_ID> --status Inactive",
     "aws_service": "IAM",
     "aws_action": "update-access-key"
@@ -233,7 +215,6 @@
     "severity": "MEDIUM",
     "description": "IAM access key is older than 90 days and has not been rotated",
     "remediation": "Rotate access keys every 90 days",
-    "keywords": ["AccessKey", "CreateDate", "Key rotation", "Old access key", "> 90 days"],
     "fix_command": "aws iam update-access-key --user-name <USER_NAME> --access-key-id <KEY_ID> --status Inactive && aws iam create-access-key --user-name <USER_NAME>",
     "aws_service": "IAM",
     "aws_action": "update-access-key + create-access-key"
@@ -245,7 +226,6 @@
     "severity": "CRITICAL",
     "description": "IAM role trust policy uses Principal: '*' which allows ANY AWS account or ANY user to assume this role",
     "remediation": "Replace Principal: '*' with specific AWS account IDs or specific IAM users/roles",
-    "keywords": ["Principal: '*'", "Principal: \"*\"", "sts:AssumeRole", "Trust policy", "AssumeRolePolicyDocument"],
     "fix_command": "aws iam update-assume-role-policy --role-name <ROLE_NAME> --policy-document '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::YOUR_ACCOUNT_ID:root\"},\"Action\":\"sts:AssumeRole\"}]}'",
     "aws_service": "IAM",
     "aws_action": "update-assume-role-policy"
@@ -257,7 +237,6 @@
     "severity": "CRITICAL",
     "description": "Lambda execution role has AdministratorAccess managed policy attached",
     "remediation": "Replace AdministratorAccess with least privilege policy specific to Lambda's needs",
-    "keywords": ["lambda.amazonaws.com", "AdministratorAccess", "Action: '*'", "lambda execution role", "ManagedPolicyArns"],
     "fix_command": "aws iam detach-role-policy --role-name <ROLE_NAME> --policy-arn arn:aws:iam::aws:policy/AdministratorAccess",
     "aws_service": "IAM",
     "aws_action": "detach-role-policy"
@@ -269,7 +248,6 @@
     "severity": "HIGH",
     "description": "Security group allows SSH (port 22) from 0.0.0.0/0",
     "remediation": "Restrict SSH access to specific IP addresses or VPN ranges only",
-    "keywords": ["port 22", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "FromPort: 22", "SSH"],
     "fix_command": "aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 22 --cidr 0.0.0.0/0",
     "aws_service": "EC2",
     "aws_action": "revoke-security-group-ingress"
@@ -281,7 +259,6 @@
     "severity": "HIGH",
     "description": "Security group allows RDP (port 3389) from 0.0.0.0/0",
     "remediation": "Restrict RDP access to specific IP addresses or VPN ranges only",
-    "keywords": ["port 3389", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "FromPort: 3389", "RDP"],
     "fix_command": "aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 3389 --cidr 0.0.0.0/0",
     "aws_service": "EC2",
     "aws_action": "revoke-security-group-ingress"
@@ -293,7 +270,6 @@
     "severity": "CRITICAL",
     "description": "Security group allows MySQL (port 3306) from 0.0.0.0/0",
     "remediation": "Restrict MySQL access to specific application servers or VPC CIDR only. Databases should never be publicly accessible.",
-    "keywords": ["port 3306", "0.0.0.0/0", "FromPort: 3306", "MySQL", "PubliclyAccessible"],
     "fix_command": "aws rds modify-db-instance --db-instance-identifier <DB_ID> --no-publicly-accessible && aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 3306 --cidr 0.0.0.0/0",
     "aws_service": "RDS + EC2",
     "aws_action": "modify-db-instance + revoke-security-group-ingress"
@@ -305,7 +281,6 @@
     "severity": "CRITICAL",
     "description": "Security group allows PostgreSQL (port 5432) from 0.0.0.0/0",
     "remediation": "Restrict PostgreSQL access to specific application servers or VPC CIDR only. Databases should never be publicly accessible.",
-    "keywords": ["port 5432", "0.0.0.0/0", "FromPort: 5432", "PostgreSQL", "PubliclyAccessible"],
     "fix_command": "aws rds modify-db-instance --db-instance-identifier <DB_ID> --no-publicly-accessible && aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 5432 --cidr 0.0.0.0/0",
     "aws_service": "RDS + EC2",
     "aws_action": "modify-db-instance + revoke-security-group-ingress"
@@ -317,7 +292,6 @@
     "severity": "CRITICAL",
     "description": "Security group allows Redis (port 6379) from 0.0.0.0/0. Redis has no authentication by default - this is extremely dangerous.",
     "remediation": "Restrict Redis access to specific application servers only. Enable Redis AUTH password if absolutely necessary.",
-    "keywords": ["port 6379", "0.0.0.0/0", "FromPort: 6379", "Redis", "ElastiCache"],
     "fix_command": "aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 6379 --cidr 0.0.0.0/0",
     "aws_service": "EC2",
     "aws_action": "revoke-security-group-ingress"
@@ -329,7 +303,6 @@
     "severity": "CRITICAL",
     "description": "Security group allows MongoDB (port 27017) from 0.0.0.0/0. MongoDB has no authentication by default in older versions - extremely dangerous.",
     "remediation": "Restrict MongoDB access to specific application servers only. Enable MongoDB authentication and authorization.",
-    "keywords": ["port 27017", "0.0.0.0/0", "FromPort: 27017", "MongoDB", "DocumentDB"],
     "fix_command": "aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 27017 --cidr 0.0.0.0/0",
     "aws_service": "EC2",
     "aws_action": "revoke-security-group-ingress"
@@ -341,7 +314,6 @@
     "severity": "CRITICAL",
     "description": "Security group allows ALL ports (-1) from 0.0.0.0/0. This is the worst possible network misconfiguration - completely exposes all resources.",
     "remediation": "IMMEDIATELY remove this rule. Security groups should only allow specific ports needed for application functionality.",
-    "keywords": ["-1", "0.0.0.0/0", "FromPort: -1", "all ports", "all traffic"],
     "fix_command": "aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol -1 --cidr 0.0.0.0/0",
     "aws_service": "EC2",
     "aws_action": "revoke-security-group-ingress"
@@ -353,7 +325,6 @@
     "severity": "MEDIUM",
     "description": "VPC Flow Logs are disabled. No network traffic logs are captured, making it impossible to detect unauthorized access, data exfiltration, or network attacks.",
     "remediation": "Enable VPC Flow Logs for all VPCs and subnets. Send logs to CloudWatch Logs or S3 for analysis.",
-    "keywords": ["FlowLog", "VPCFlowLogs", "FlowLogsDisabled", "No Flow Logs", "vpc-flow-logs"],
     "fix_command": "aws ec2 create-flow-logs --resource-ids <VPC_ID> --resource-type VPC --traffic-type ALL --log-destination-type cloud-watch-logs --log-group-name vpc-flow-logs",
     "aws_service": "EC2",
     "aws_action": "create-flow-logs"
@@ -365,7 +336,6 @@
     "severity": "CRITICAL",
     "description": "RDS database has PubliclyAccessible=true, meaning it has a public IP address and is accessible from the internet. Databases should never be publicly accessible.",
     "remediation": "Set PubliclyAccessible=false. Database should only be accessible from within VPC. Use bastion host or VPN if external access is needed.",
-    "keywords": ["PubliclyAccessible: true", "RDS public", "database public", "0.0.0.0/0", "port 3306"],
     "fix_command": "aws rds modify-db-instance --db-instance-identifier <DB_ID> --no-publicly-accessible",
     "aws_service": "RDS",
     "aws_action": "modify-db-instance"
@@ -377,7 +347,6 @@
     "severity": "MEDIUM",
     "description": "Resources are deployed in the Default VPC. Default VPC has auto-assigned public IPs, permissive default security group, and lacks proper network controls.",
     "remediation": "Create custom VPC with private subnets, NAT gateways, and restricted security groups. Migrate all resources from default VPC.",
-    "keywords": ["Default VPC", "isDefault", "default-vpc", "MapPublicIpOnLaunch: true", "default security group"],
     "fix_command": "Create custom VPC manually via AWS Console -> VPC -> Create VPC -> Select 'VPC with public and private subnets'",
     "aws_service": "VPC",
     "aws_action": "create-vpc"
@@ -389,7 +358,6 @@
     "severity": "MEDIUM",
     "description": "S3 bucket does not have default encryption enabled. Data uploaded to this bucket will be stored unencrypted at rest.",
     "remediation": "Enable default encryption on S3 bucket using SSE-S3 or SSE-KMS",
-    "keywords": ["BucketEncryption", "SSE-S3", "encryption disabled", "no encryption", "ServerSideEncryptionConfiguration"],
     "fix_command": "aws s3api put-bucket-encryption --bucket <BUCKET_NAME> --server-side-encryption-configuration '{\"Rules\":[{\"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"AES256\"}}]}'",
     "aws_service": "S3",
     "aws_action": "put-bucket-encryption"
@@ -401,7 +369,6 @@
     "severity": "MEDIUM",
     "description": "S3 bucket does not enforce encryption for uploaded objects. Clients can upload unencrypted objects without any encryption headers.",
     "remediation": "Add bucket policy that denies PutObject requests without x-amz-server-side-encryption header",
-    "keywords": ["PutObject", "x-amz-server-side-encryption", "s3:x-amz-server-side-encryption", "SSE-S3", "Deny"],
     "fix_command": "aws s3api put-bucket-policy --bucket <BUCKET_NAME> --policy '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"s3:PutObject\",\"Resource\":\"arn:aws:s3:::<BUCKET_NAME>/*\",\"Condition\":{\"StringNotEquals\":{\"s3:x-amz-server-side-encryption\":\"AES256\"}}}]}'",
     "aws_service": "S3",
     "aws_action": "put-bucket-policy"
@@ -413,7 +380,6 @@
     "severity": "HIGH",
     "description": "EBS volume has encryption disabled. Any data written to this volume (application data, logs, databases) is stored unencrypted at rest.",
     "remediation": "Enable EBS encryption by default at the account level, or specify Encrypted: true for each volume",
-    "keywords": ["Encrypted: false", "EBS encryption", "Volume encryption", "ebs-encryption-disabled"],
     "fix_command": "aws ec2 enable-ebs-encryption-by-default",
     "aws_service": "EC2",
     "aws_action": "enable-ebs-encryption-by-default"
@@ -425,7 +391,6 @@
     "severity": "HIGH",
     "description": "RDS database instance has encryption disabled. All database data, backups, read replicas, and snapshots are stored unencrypted at rest.",
     "remediation": "Enable encryption when creating RDS instances. Note: Encryption cannot be enabled on existing unencrypted RDS instances without migration.",
-    "keywords": ["StorageEncrypted: false", "RDS encryption", "database encryption", "KmsKeyId"],
     "fix_command": "aws rds copy-db-snapshot --source-db-snapshot-identifier <SNAPSHOT_ID> --target-db-snapshot-identifier encrypted-snapshot --encrypted && aws rds restore-db-instance-from-db-snapshot --db-instance-identifier encrypted-db --db-snapshot-identifier encrypted-snapshot",
     "aws_service": "RDS",
     "aws_action": "copy-db-snapshot + restore-db-instance-from-db-snapshot"
@@ -437,7 +402,6 @@
     "severity": "MEDIUM",
     "description": "DynamoDB table uses default AWS owned encryption key instead of customer managed KMS key. While data is encrypted, customer lacks control over key rotation and audit capabilities.",
     "remediation": "Enable server-side encryption with customer managed KMS key for better security and compliance",
-    "keywords": ["SSESpecification", "KMSMasterKeyId", "AWS owned key", "default encryption", "SSEEnabled"],
     "fix_command": "aws kms create-key --description 'DynamoDB customer managed key' && aws dynamodb update-table --table-name <TABLE_NAME> --sse-specification Enabled=true,SSEType=KMS,KMSMasterKeyId=<KEY_ARN>",
     "aws_service": "DynamoDB + KMS",
     "aws_action": "update-table + create-key"
@@ -449,7 +413,6 @@
     "severity": "HIGH",
     "description": "Lambda function environment variables are not encrypted with a customer managed KMS key. While AWS encrypts them by default, using default key means less control and potential exposure of sensitive data (API keys, database passwords) in plaintext in Lambda console/API.",
     "remediation": "Enable encryption with customer managed KMS key for Lambda environment variables",
-    "keywords": ["KmsKeyArn", "Environment", "Variables", "kms:Encrypt", "kms:Decrypt", "default AWS managed key"],
     "fix_command": "aws lambda update-function-configuration --function-name <FUNCTION_NAME> --kms-key-arn arn:aws:kms:<REGION>:<ACCOUNT_ID>:key/<KEY_ID>",
     "aws_service": "Lambda + KMS",
     "aws_action": "update-function-configuration"
@@ -461,7 +424,6 @@
     "severity": "MEDIUM",
     "description": "SQS queue does not have server-side encryption enabled. Messages are stored unencrypted at rest, potentially exposing sensitive data.",
     "remediation": "Enable SSE-SQS encryption using AWS managed KMS key or customer managed key",
-    "keywords": ["KmsMasterKeyId", "SqsManagedSseEnabled", "SSE", "encryption", "sqs"],
     "fix_command": "aws sqs set-queue-attributes --queue-url <QUEUE_URL> --attributes '{\"KmsMasterKeyId\":\"alias/aws/sqs\"}'",
     "aws_service": "SQS",
     "aws_action": "set-queue-attributes"
@@ -473,7 +435,6 @@
     "severity": "MEDIUM",
     "description": "SNS topic does not have server-side encryption enabled. Messages published to this topic are stored unencrypted at rest.",
     "remediation": "Enable SSE-SNS encryption using AWS managed KMS key or customer managed key",
-    "keywords": ["KmsMasterKeyId", "TopicEncryption", "sns:Encrypt", "sns:Decrypt"],
     "fix_command": "aws sns set-topic-attributes --topic-arn <TOPIC_ARN> --attribute-name KmsMasterKeyId --attribute-value alias/aws/sns",
     "aws_service": "SNS",
     "aws_action": "set-topic-attributes"
@@ -485,12 +446,10 @@
     "severity": "HIGH",
     "description": "EFS file system has encryption at rest disabled. All data stored on this file system (application files, logs, databases, backups) is stored unencrypted.",
     "remediation": "Enable encryption at rest when creating EFS file systems. Note: Cannot be enabled on existing file systems without data migration.",
-    "keywords": ["Encrypted: false", "EFS encryption", "KmsKeyId", "FileSystem"],
     "fix_command": "aws efs create-file-system --encrypted --kms-key-id alias/aws/efs",
     "aws_service": "EFS",
     "aws_action": "create-file-system"
-  }
-,
+  },
   "42": {
     "misconfig_id": 42,
     "rule_id": "REDSHIFT-001",
@@ -498,12 +457,10 @@
     "severity": "HIGH",
     "description": "Redshift cluster has encryption at rest disabled. All data in the data warehouse (customer data, financial records, analytics) is stored unencrypted.",
     "remediation": "Enable encryption when creating Redshift clusters. Note: Encryption cannot be enabled on existing clusters without data migration.",
-    "keywords": ["Encrypted: false", "Redshift encryption", "KmsKeyId", "StorageEncrypted"],
     "fix_command": "aws redshift create-cluster --cluster-identifier <NEW_CLUSTER_ID> --db-name <DB_NAME> --master-username <USER> --master-user-password <PASSWORD> --node-type dc2.large --cluster-type single-node --encrypted --kms-key-id alias/aws/redshift",
     "aws_service": "Redshift",
     "aws_action": "create-cluster"
-  }
-,
+  },
   "43": {
     "misconfig_id": 43,
     "rule_id": "EC2-001",
@@ -511,12 +468,10 @@
     "severity": "MEDIUM",
     "description": "EC2 instance is launched in a public subnet with auto-assign public IP enabled. This gives the instance a public IP address, increasing attack surface unnecessarily.",
     "remediation": "Use private subnets for workloads that don't need direct internet access. If public IP is required, restrict security groups to specific IPs.",
-    "keywords": ["MapPublicIpOnLaunch: true", "AssociatePublicIpAddress: true", "PublicIp", "auto-assign"],
     "fix_command": "aws ec2 modify-subnet-attribute --subnet-id <SUBNET_ID> --no-map-public-ip-on-launch",
     "aws_service": "EC2",
     "aws_action": "modify-subnet-attribute"
-  }
-,
+  },
   "44": {
     "misconfig_id": 44,
     "rule_id": "EC2-002",
@@ -524,7 +479,6 @@
     "severity": "HIGH",
     "description": "Default security group is modified to allow SSH from 0.0.0.0/0, and an EC2 instance is launched using it. This exposes the instance to internet SSH attacks and bypasses network segmentation best practices.",
     "remediation": "Create and use custom security groups with least-privilege rules. Do not modify or rely on default security groups for workloads.",
-    "keywords": ["default security group", "0.0.0.0/0", "SecurityGroupIngress", "SSH", "port 22"],
     "fix_command": "aws ec2 revoke-security-group-ingress --group-id <DEFAULT_SG_ID> --protocol tcp --port 22 --cidr 0.0.0.0/0",
     "aws_service": "EC2",
     "aws_action": "revoke-security-group-ingress"
@@ -536,7 +490,6 @@
     "severity": "LOW",
     "description": "IAM credential reports are not generated on a regular schedule. Without regular credential reports, you cannot audit user access keys, MFA status, password ages, or last activity.",
     "remediation": "Schedule automated IAM credential report generation using EventBridge and Lambda",
-    "keywords": ["credential report", "get-credential-report", "generate-credential-report", "IAM reporting", "AWS::IAM::User"],
     "fix_command": "aws iam generate-credential-report",
     "aws_service": "IAM",
     "aws_action": "generate-credential-report"
@@ -548,7 +501,6 @@
     "severity": "HIGH",
     "description": "AWS CloudTrail is disabled. No API activity logs are captured, making it impossible to audit who did what, when, and from where in your AWS account.",
     "remediation": "Enable CloudTrail in all regions with log file validation and encryption. Send logs to CloudWatch Logs and S3 bucket with appropriate permissions.",
-    "keywords": ["CloudTrail", "Trail", "IsMultiRegionTrail", "EnableLogFileValidation", "S3BucketName"],
     "fix_command": "aws cloudtrail create-trail --name multi-region-cloudtrail --s3-bucket-name <BUCKET_NAME> --is-multi-region-trail --enable-log-file-validation --include-global-service-events && aws cloudtrail start-logging --name multi-region-cloudtrail",
     "aws_service": "CloudTrail",
     "aws_action": "create-trail + start-logging"
@@ -560,7 +512,6 @@
     "severity": "HIGH",
     "description": "AWS Config recorder is disabled. No configuration history, change tracking, or compliance monitoring for AWS resources.",
     "remediation": "Enable AWS Config recorder in all regions with appropriate rules and S3 bucket delivery",
-    "keywords": ["ConfigurationRecorder", "RecordingGroup", "ConfigRecorder", "DeliveryChannel"],
     "fix_command": "aws configservice put-configuration-recorder --configuration-recorder name=default,roleARN=arn:aws:iam::<ACCOUNT_ID>:role/AWSConfigRole --recording-group allSupported=true,includeGlobalResourceTypes=true && aws configservice put-delivery-channel --delivery-channel name=default,s3BucketName=<BUCKET_NAME> && aws configservice start-configuration-recorder --configuration-recorder-name default",
     "aws_service": "AWS Config",
     "aws_action": "put-configuration-recorder + put-delivery-channel + start-configuration-recorder"
@@ -572,7 +523,6 @@
     "severity": "HIGH",
     "description": "Amazon GuardDuty is disabled. No intelligent threat detection, anomaly monitoring, or finding generation for your AWS account.",
     "remediation": "Enable GuardDuty in all regions with S3 and SNS publishing for findings",
-    "keywords": ["GuardDuty", "Detector", "FindingPublishingFrequency", "EnableGuardDuty"],
     "fix_command": "aws guardduty create-detector --enable --finding-publishing-frequency FIFTEEN_MINUTES",
     "aws_service": "GuardDuty",
     "aws_action": "create-detector"
@@ -584,7 +534,6 @@
     "severity": "MEDIUM",
     "description": "S3 bucket does not have access logging enabled. No logs are captured for who accessed which objects, when, and from where.",
     "remediation": "Enable S3 server access logging to a dedicated logging bucket with proper permissions.",
-    "keywords": ["LoggingConfiguration", "TargetBucket", "TargetPrefix", "Server access logging"],
     "fix_command": "aws s3api put-bucket-logging --bucket <BUCKET_NAME> --bucket-logging-status '{\"LoggingEnabled\":{\"TargetBucket\":\"<LOGGING_BUCKET>\",\"TargetPrefix\":\"access-logs/\"}}'",
     "aws_service": "S3",
     "aws_action": "put-bucket-logging"
@@ -596,7 +545,6 @@
     "severity": "MEDIUM",
     "description": "IAM users have passwords but no account-wide password policy is enforced. Passwords never expire, there are no complexity requirements, and passwords can be reused indefinitely.",
     "remediation": "Enable AWS account password policy with minimum length, complexity, and expiration (e.g., 90 days).",
-    "keywords": ["PasswordPolicy", "MinimumPasswordLength", "RequireUppercaseCharacters", "RequireLowercaseCharacters", "RequireNumbers", "RequireSymbols", "MaxPasswordAge"],
     "fix_command": "aws iam update-account-password-policy --minimum-password-length 14 --require-symbols --require-numbers --require-uppercase-characters --require-lowercase-characters --allow-users-to-change-password --max-password-age 90 --password-reuse-prevention 24 --hard-expiry",
     "aws_service": "IAM",
     "aws_action": "update-account-password-policy"
