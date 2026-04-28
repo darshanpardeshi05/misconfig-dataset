@@ -86,7 +86,7 @@ class MisconfigDetectionPipeline:
             kw_enc = self.xgb_feature_encoders['keywords'].transform([keywords])[0]
             
             input_df = pd.DataFrame([[cat_enc, sev_enc, kw_enc]], 
-                                   columns=['category_encoded', 'severity_encoded', 'keyword_encoded'])
+                                   columns=['category_enc', 'severity_enc', 'keyword_enc'])
             
             pred_encoded = self.xgb_model.predict(input_df)
             pred_original = self.xgb_label_encoder.inverse_transform(pred_encoded)
