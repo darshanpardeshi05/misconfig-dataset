@@ -87,16 +87,16 @@
     "aws_service": "EC2",
     "aws_action": "revoke-security-group-ingress"
   },
-  "9": {
+    "9": {
     "misconfig_id": 9,
     "rule_id": "S3-004",
     "category": "Storage-Exposure",
     "severity": "CRITICAL",
     "description": "S3 bucket policy uses Principal '*' which grants access to anyone on the internet",
     "remediation": "Remove public policy and restrict access to specific IAM principals",
-    "fix_command": "aws s3api delete-bucket-policy --bucket <BUCKET_NAME>",
+    "fix_command": "aws s3api delete-bucket-policy --bucket <BUCKET_NAME> && aws s3api put-public-access-block --bucket <BUCKET_NAME> --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true",
     "aws_service": "S3",
-    "aws_action": "delete-bucket-policy"
+    "aws_action": "delete-bucket-policy + put-public-access-block"
   },
   "10": {
     "misconfig_id": 10,
@@ -171,7 +171,7 @@
     "severity": "HIGH",
     "description": "IAM user has ec2:* permission - can perform ANY EC2 action on ANY EC2 resource in the account",
     "remediation": "Replace ec2:* with least privilege actions and restrict to specific resources",
-    "fix_command": "aws iam delete-user-policy --user-name <USER_NAME> --policy-name <POLICY_NAME>",
+    "fix_command": "aws iam list-user-policies --user-name <USER_NAME> --query 'PolicyNames[0]' --output text | xargs -I {} aws iam delete-user-policy --user-name <USER_NAME> --policy-name {}",
     "aws_service": "IAM",
     "aws_action": "delete-user-policy"
   },
