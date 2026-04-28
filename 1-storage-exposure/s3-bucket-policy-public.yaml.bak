@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: "MISCONFIGURATION - S3 bucket with bucket policy allowing public access via Principal: '*'"
+Description: MISCONFIGURATION - S3 bucket with bucket policy allowing public access via Principal: "*"
 
 # METADATA - For research tracking and automated detection
 Metadata:

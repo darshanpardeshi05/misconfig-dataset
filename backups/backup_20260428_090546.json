@@ -1,0 +1,9 @@
+{
+  "timestamp": "20260428_090546",
+  "misconfig_id": 2,
+  "rule_id": "S3-002",
+  "service": "S3",
+  "resource": "s3-rw-719279823313-s3-rw-20260428-085252",
+  "fix_command": "aws s3api put-public-access-block --bucket <BUCKET_NAME> --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true",
+  "backup_created": true
+}

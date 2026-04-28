@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Retrain XGBoost with ALL keywords and ensure correct mapping
+Retrain XGBoost with continuous labels and ALL keywords
 """
 
 import os
@@ -15,8 +15,9 @@ from pathlib import Path
 
 BASE_PATH = Path("/home/darshan/misconfig-dataset")
 
-# Manual mapping to ensure correct predictions
+# Complete keyword to misconfig ID mapping (ALL 50)
 KEYWORD_TO_ID = {
+    # Storage Exposure (1-10)
     'PublicRead': 1,
     'PublicReadWrite': 2,
     'BlockPublicAccess disabled': 3,
@@ -26,9 +27,14 @@ KEYWORD_TO_ID = {
     'AMI public': 7,
     'EFS public mount': 8,
     'S3 bucket policy public': 9,
+    'Principal star': 9,
+    'bucket policy principal star': 9,
+    'Principal *': 9,
     'S3 object public': 10,
+    # IAM Over-Permission (11-22)
     'Action wildcard': 11,
     'Resource wildcard': 12,
+    'Action and Resource wildcard': 13,
     'AdministratorAccess': 14,
     's3 full access': 15,
     'ec2 full access': 16,
@@ -36,8 +42,9 @@ KEYWORD_TO_ID = {
     'User MFA missing': 18,
     'Inactive user': 19,
     'Old access key': 20,
-    'Principal star': 21,
+    'Principal star trust': 21,
     'Lambda over permissive': 22,
+    # Network Oversights (23-32)
     'SSH open': 23,
     'RDP open': 24,
     'MySQL open': 25,
@@ -48,97 +55,70 @@ KEYWORD_TO_ID = {
     'Flow logs disabled': 30,
     'RDS public': 31,
     'Default VPC': 32,
+    # Lack of Encryption (33-42)
     'Encryption disabled': 33,
     'SSE not enforced': 34,
     'EBS encryption': 35,
     'RDS encryption': 36,
+    'DynamoDB encryption': 37,
     'Lambda env not encrypted': 38,
     'SQS encryption': 39,
     'SNS encryption': 40,
     'EFS encryption': 41,
+    'Redshift encryption': 42,
+    # Insecure Defaults (43-50)
     'Auto-assign public IP': 43,
     'Default security group': 44,
     'Credential report not enabled': 45,
+    'CloudTrail disabled': 46,
+    'Config recorder disabled': 47,
+    'GuardDuty disabled': 48,
     'S3 logging disabled': 49,
     'Password policy missing': 50
 }
 
-def extract_keywords_and_label(yaml_file):
-    with open(yaml_file, 'r') as f:
-        content = f.read()
-    
-    match = re.search(r'RuleId:\s*"([^"]+)"', content)
-    if not match:
-        return None
-    
-    label = match.group(1)
-    
-    category_match = re.search(r'Category:\s*"([^"]+)"', content)
-    category = category_match.group(1) if category_match else "Unknown"
-    
-    severity_match = re.search(r'Severity:\s*"([^"]+)"', content)
-    severity = severity_match.group(1) if severity_match else "MEDIUM"
-    
-    keywords = []
-    kw_section = re.search(r'Keywords:\s*\n((?:\s*-\s*"[^"]+"\s*\n)+)', content)
-    if kw_section:
-        keyword_lines = kw_section.group(1)
-        keywords = re.findall(r'-\s*"([^"]+)"', keyword_lines)
-    
-    return {
-        'category': category,
-        'severity': severity,
-        'keywords': keywords,
-        'rule_id': label
-    }
-
 def main():
     print("=" * 60)
-    print("RETRAINING XGBOOST WITH KEYWORD TO ID MAPPING")
+    print("RETRAINING XGBOOST WITH ALL 50 MISCONFIGURATIONS")
     print("=" * 60)
     
     all_data = []
     
-    # First, add manual keyword mapping
+    # Add all keyword mappings
     for keyword, misconfig_id in KEYWORD_TO_ID.items():
+        # Determine category based on ID range
+        if misconfig_id <= 10:
+            category = "Storage Exposure"
+            severity = "CRITICAL"
+        elif misconfig_id <= 22:
+            category = "IAM Over-Permission"
+            severity = "HIGH"
+        elif misconfig_id <= 32:
+            category = "Network Oversights"
+            severity = "HIGH"
+        elif misconfig_id <= 42:
+            category = "Lack of Encryption"
+            severity = "MEDIUM"
+        else:
+            category = "Insecure Defaults"
+            severity = "MEDIUM"
+        
         all_data.append({
-            'category': 'Storage-Exposure' if misconfig_id <= 10 else 'IAM-OverPermission',
-            'severity': 'CRITICAL' if misconfig_id <= 10 else 'HIGH',
+            'category': category,
+            'severity': severity,
             'keyword': keyword,
-            'rule_id': str(misconfig_id)
+            'label': misconfig_id
         })
     
-    # Also extract from YAML files for additional keywords
-    category_folders = ["1-storage-exposure", "2-iam-over-permission", "3-network-oversights", "4-lack-of-encryption", "5-insecure-defaults"]
-    
-    for category_folder in category_folders:
-        folder_path = BASE_PATH / category_folder
-        if not folder_path.exists():
-            continue
-        
-        for yaml_file in folder_path.glob("*.yaml"):
-            data = extract_keywords_and_label(yaml_file)
-            if data and data['keywords']:
-                for keyword in data['keywords']:
-                    # Extract number from RuleId (e.g., S3-001 -> 1)
-                    numbers = re.findall(r'\d+', data['rule_id'])
-                    rule_num = int(numbers[0]) if numbers else 0
-                    
-                    all_data.append({
-                        'category': data['category'].replace('-', ' '),
-                        'severity': data['severity'],
-                        'keyword': keyword,
-                        'rule_id': str(rule_num)
-                    })
-    
+    # Create DataFrame
     df = pd.DataFrame(all_data)
-    df = df.drop_duplicates(subset=['keyword', 'rule_id'])
+    df = df.drop_duplicates(subset=['keyword', 'label'])
     
     print(f"Total training samples: {len(df)}")
     print(f"Unique keywords: {df['keyword'].nunique()}")
-    print(f"Unique labels: {df['rule_id'].nunique()}")
+    print(f"Unique labels: {sorted(df['label'].unique())}")
     
-    # Encode
+    # Encode using LabelEncoder (handles non-continuous labels)
     le_category = LabelEncoder()
     le_severity = LabelEncoder()
     le_keyword = LabelEncoder()
@@ -147,7 +127,9 @@ def main():
     df['category_enc'] = le_category.fit_transform(df['category'])
     df['severity_enc'] = le_severity.fit_transform(df['severity'])
     df['keyword_enc'] = le_keyword.fit_transform(df['keyword'])
-    df['label_enc'] = le_label.fit_transform(df['rule_id'])
+    df['label_enc'] = le_label.fit_transform(df['label'])
+    
+    print(f"Encoded labels (0-{df['label_enc'].max()}): {sorted(df['label_enc'].unique())}")
     
     X = df[['category_enc', 'severity_enc', 'keyword_enc']]
     y = df['label_enc']
@@ -166,20 +148,32 @@ def main():
     
     xgb_model.fit(X_train, y_train)
     
-    # Test prediction for "PublicRead"
-    test_keyword = 'PublicRead'
-    try:
-        test_cat_enc = le_category.transform(['Storage Exposure'])[0]
-        test_sev_enc = le_severity.transform(['CRITICAL'])[0]
-        test_kw_enc = le_keyword.transform([test_keyword])[0]
-        
-        test_input = pd.DataFrame([[test_cat_enc, test_sev_enc, test_kw_enc]], 
-                                  columns=['category_enc', 'severity_enc', 'keyword_enc'])
-        pred = xgb_model.predict(test_input)
-        pred_label = le_label.inverse_transform(pred)[0]
-        print(f"\nTest: Keyword '{test_keyword}' -> Predicted ID: {pred_label}")
-    except Exception as e:
-        print(f"\nTest prediction error: {e}")
+    # Test predictions
+    print("\nTesting predictions:")
+    test_cases = [
+        ('Storage Exposure', 'CRITICAL', 'PublicRead', 1),
+        ('Storage Exposure', 'CRITICAL', 'PublicReadWrite', 2),
+        ('Storage Exposure', 'HIGH', 'BlockPublicAccess disabled', 3),
+        ('Storage Exposure', 'CRITICAL', 'Principal star', 9),
+        ('Storage Exposure', 'CRITICAL', 'bucket policy principal star', 9),
+        ('IAM Over-Permission', 'HIGH', 'Action wildcard', 11),
+        ('Network Oversights', 'HIGH', 'SSH open', 23),
+    ]
+    
+    for category, severity, keyword, expected in test_cases:
+        try:
+            cat_enc = le_category.transform([category])[0]
+            sev_enc = le_severity.transform([severity])[0]
+            kw_enc = le_keyword.transform([keyword])[0]
+            
+            test_input = pd.DataFrame([[cat_enc, sev_enc, kw_enc]], 
+                                      columns=['category_enc', 'severity_enc', 'keyword_enc'])
+            pred_enc = xgb_model.predict(test_input)
+            pred_label = le_label.inverse_transform(pred_enc)[0]
+            status = "✓" if pred_label == expected else "✗"
+            print(f"  {status} '{keyword}' -> Predicted: {pred_label}, Expected: {expected}")
+        except Exception as e:
+            print(f"  ✗ '{keyword}' failed: {e}")
     
     # Save models
     models_path = BASE_PATH / "models"
@@ -197,7 +191,6 @@ def main():
     
     print("\n" + "=" * 60)
     print("RETRAINING COMPLETE")
-    print("=" * 60)
     print(f"  Model saved to: {models_path / 'xgboost_model.pkl'}")
     print("=" * 60)
 

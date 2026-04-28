@@ -40,7 +40,7 @@
     "severity": "HIGH"
   },
   "s3-bucket-policy-public.yaml": {
-    "keywords": ["Principal: '*'", "Effect: Allow", "s3:GetObject", "BlockPublicPolicy: false"],
+    "keywords": ["Principal: '*'", "Effect: Allow", "s3:GetObject", "s3:ListBucket", "bucket policy principal star"],
     "category": "Storage Exposure",
     "severity": "CRITICAL"
   },
