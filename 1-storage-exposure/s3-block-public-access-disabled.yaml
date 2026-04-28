@@ -23,7 +23,7 @@ Resources:
     Properties:
 
       # Unique bucket name to avoid global conflicts
-      BucketName: !Sub "s3-no-block-public-${AWS::AccountId}-${AWS::StackName}"
+      BucketName: !Sub "sb-${AWS::AccountId}-${AWS::StackName}"
 
       # Default ACL is private, but protection is removed
       # MISCONFIGURATION: Block Public Access fully disabled
