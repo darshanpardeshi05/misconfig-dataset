@@ -1,60 +1,32 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: MISCONFIGURATION - IAM user with inline ec2:* access (full EC2 permissions)
+Description: MISCONFIGURATION - IAM user with ec2 full access
 
 Metadata:
   Misconfiguration:
-    Id: "MISCONFIG-016"
-    Batch: "Batch-4"
-    Category: "IAM & Access Over-Permission"
-    Severity: "HIGH"
-    RuleId: "IAM-006"
-    Service: "IAM"
-    ResourceType: "AWS::IAM::User"
-    Description: "IAM user has ec2:* permission - can perform ANY EC2 action on ANY EC2 resource in the account"
-    Impact: "User can launch, terminate, modify instances, security groups, AMIs, and volumes across the account"
-    Remediation: "Replace ec2:* with least privilege actions and restrict to specific resources"
-
-    Keywords:
-      - "ec2:*"
-      - "Action: ec2:*"
-      - "Resource: *"
-      - "ec2:RunInstances"
-      - "ec2:TerminateInstances"
-
-    ML_Label: "misconfiguration"
+    Category: IAM-OverPermission
+    Severity: HIGH
+    RuleId: IAM-006
+    Description: IAM user has ec2:* permission
 
 Resources:
-
   EC2FullAccessUser:
     Type: AWS::IAM::User
     Properties:
-      UserName: !Sub "ec2-full-access-user-${AWS::StackName}"
+      UserName: !Sub "ec2-user-${AWS::StackName}"
       Tags:
         - Key: Name
-          Value: "EC2-Full-Access-User"
-        - Key: Misconfiguration
-          Value: "IAM-EC2-Full-Access"
-        - Key: MisconfigId
-          Value: "MISCONFIG-016"
-        - Key: Batch
-          Value: "Batch-4"
-        - Key: Category
-          Value: "IAM-OverPermission"
-        - Key: Severity
-          Value: "HIGH"
-        - Key: ToolDetection
-          Value: "Prowler,ScoutSuite,Custodian"
+          Value: EC2FullAccessUser
 
   EC2FullAccessPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: !Sub "EC2FullAccessPolicy-${AWS::StackName}"
+      PolicyName: !Sub "EC2Policy-${AWS::StackName}"
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Effect: "Allow"
-            Action: "ec2:*"   # MISCONFIGURATION
-            Resource: "*"     # MISCONFIGURATION
+          - Effect: Allow
+            Action: "ec2:*"
+            Resource: "*"
       Users:
         - !Ref EC2FullAccessUser
 
@@ -65,17 +37,4 @@ Resources:
 
 Outputs:
   Username:
-    Description: "IAM user with full EC2 access"
     Value: !Ref EC2FullAccessUser
-
-  MisconfigId:
-    Description: "Unique Misconfiguration ID"
-    Value: "MISCONFIG-016"
-
-  RiskLevel:
-    Description: "Risk Severity"
-    Value: "HIGH"
-
-  Remediation:
-    Description: "Fix: Restrict EC2 permissions"
-    Value: "Replace ec2:* with least privilege actions and restrict to specific resources"
