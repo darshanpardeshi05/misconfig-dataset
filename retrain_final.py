@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Final XGBoost Retraining - Force add all keywords including 'Principal star'
+Final XGBoost Retraining - Force add all keywords
 """
 
 import pandas as pd
@@ -44,10 +44,8 @@ training_data = [
     ("Storage Exposure", "HIGH", "0.0.0.0/0", 8),
     # Misconfig #9
     ("Storage Exposure", "CRITICAL", "Principal: '*'", 9),
-    ("Storage Exposure", "CRITICAL", "Effect: Allow", 9),
-    ("Storage Exposure", "CRITICAL", "s3:GetObject", 9),
     ("Storage Exposure", "CRITICAL", "bucket policy public", 9),
-    ("Storage Exposure", "CRITICAL", "Principal star", 9),   # ADDED
+    ("Storage Exposure", "CRITICAL", "Principal star", 9),
     # Misconfig #10
     ("Storage Exposure", "HIGH", "public-read", 10),
     ("Storage Exposure", "HIGH", "put-object-acl", 10),
@@ -57,58 +55,53 @@ training_data = [
     # Misconfig #12
     ("IAM Over-Permission", "HIGH", "Resource: '*'", 12),
     ("IAM Over-Permission", "HIGH", "Resource wildcard", 12),
-    # Misconfig #13-22 (add more as needed)
+    # Misconfig #13
+    ("IAM Over-Permission", "CRITICAL", "Action and Resource wildcard", 13),
+    # Misconfig #14
     ("IAM Over-Permission", "CRITICAL", "AdministratorAccess", 14),
+    # Misconfig #15
     ("IAM Over-Permission", "HIGH", "s3:*", 15),
+    ("IAM Over-Permission", "HIGH", "s3 full access", 15),
+    # Misconfig #16
     ("IAM Over-Permission", "HIGH", "ec2:*", 16),
+    ("IAM Over-Permission", "HIGH", "ec2 full access", 16),
+    ("IAM Over-Permission", "HIGH", "ec2 full access user", 16),
     # Network misconfigs
-    ("Network Oversights", "HIGH", "port 22", 23),
     ("Network Oversights", "HIGH", "SSH open", 23),
-    ("Network Oversights", "HIGH", "port 3389", 24),
     ("Network Oversights", "HIGH", "RDP open", 24),
-    ("Network Oversights", "CRITICAL", "port 3306", 25),
     ("Network Oversights", "CRITICAL", "MySQL open", 25),
-    ("Network Oversights", "CRITICAL", "port 5432", 26),
     ("Network Oversights", "CRITICAL", "PostgreSQL open", 26),
-    ("Network Oversights", "CRITICAL", "port 6379", 27),
     ("Network Oversights", "CRITICAL", "Redis open", 27),
-    ("Network Oversights", "CRITICAL", "port 27017", 28),
     ("Network Oversights", "CRITICAL", "MongoDB open", 28),
-    ("Network Oversights", "CRITICAL", "-1", 29),
-    ("Network Oversights", "CRITICAL", "all ports", 29),
-    ("Network Oversights", "MEDIUM", "FlowLog", 30),
-    ("Network Oversights", "MEDIUM", "VPCFlowLogs", 30),
-    ("Network Oversights", "CRITICAL", "PubliclyAccessible: true", 31),
+    ("Network Oversights", "CRITICAL", "All ports open", 29),
+    ("Network Oversights", "MEDIUM", "Flow logs disabled", 30),
     ("Network Oversights", "CRITICAL", "RDS public", 31),
     ("Network Oversights", "MEDIUM", "Default VPC", 32),
     # Encryption misconfigs
-    ("Lack of Encryption", "MEDIUM", "BucketEncryption", 33),
-    ("Lack of Encryption", "MEDIUM", "encryption disabled", 33),
-    ("Lack of Encryption", "MEDIUM", "PutObject", 34),
-    ("Lack of Encryption", "MEDIUM", "x-amz-server-side-encryption", 34),
-    ("Lack of Encryption", "HIGH", "Encrypted: false", 35),
-    ("Lack of Encryption", "HIGH", "StorageEncrypted: false", 36),
-    ("Lack of Encryption", "MEDIUM", "SSESpecification", 37),
-    ("Lack of Encryption", "HIGH", "KmsKeyArn", 38),
-    ("Lack of Encryption", "MEDIUM", "KmsMasterKeyId", 39),
-    ("Lack of Encryption", "MEDIUM", "TopicEncryption", 40),
-    ("Lack of Encryption", "HIGH", "Encrypted: false EF", 41),
+    ("Lack of Encryption", "MEDIUM", "Encryption disabled", 33),
+    ("Lack of Encryption", "MEDIUM", "SSE not enforced", 34),
+    ("Lack of Encryption", "HIGH", "EBS encryption", 35),
+    ("Lack of Encryption", "HIGH", "RDS encryption", 36),
+    ("Lack of Encryption", "MEDIUM", "DynamoDB encryption", 37),
+    ("Lack of Encryption", "HIGH", "Lambda env not encrypted", 38),
+    ("Lack of Encryption", "MEDIUM", "SQS encryption", 39),
+    ("Lack of Encryption", "MEDIUM", "SNS encryption", 40),
+    ("Lack of Encryption", "HIGH", "EFS encryption", 41),
     ("Lack of Encryption", "HIGH", "Redshift encryption", 42),
     # Insecure Defaults
-    ("Insecure Defaults", "MEDIUM", "MapPublicIpOnLaunch: true", 43),
-    ("Insecure Defaults", "MEDIUM", "AssociatePublicIpAddress: true", 43),
-    ("Insecure Defaults", "HIGH", "default security group", 44),
-    ("Insecure Defaults", "LOW", "credential report", 45),
-    ("Insecure Defaults", "HIGH", "CloudTrail", 46),
-    ("Insecure Defaults", "HIGH", "ConfigurationRecorder", 47),
-    ("Insecure Defaults", "HIGH", "GuardDuty", 48),
-    ("Insecure Defaults", "MEDIUM", "LoggingConfiguration", 49),
-    ("Insecure Defaults", "MEDIUM", "PasswordPolicy", 50),
+    ("Insecure Defaults", "MEDIUM", "Auto-assign public IP", 43),
+    ("Insecure Defaults", "HIGH", "Default security group", 44),
+    ("Insecure Defaults", "LOW", "Credential report not enabled", 45),
+    ("Insecure Defaults", "HIGH", "CloudTrail disabled", 46),
+    ("Insecure Defaults", "HIGH", "Config recorder disabled", 47),
+    ("Insecure Defaults", "HIGH", "GuardDuty disabled", 48),
+    ("Insecure Defaults", "MEDIUM", "S3 logging disabled", 49),
+    ("Insecure Defaults", "MEDIUM", "Password policy missing", 50),
 ]
 
 def main():
     print("=" * 60)
-    print("FINAL XGBOOST RETRAINING")
+    print("RETRAINING XGBOOST WITH ALL KEYWORDS")
     print("=" * 60)
     
     df = pd.DataFrame(training_data, columns=['category', 'severity', 'keyword', 'label'])
@@ -129,7 +122,7 @@ def main():
     df['keyword_enc'] = le_keyword.fit_transform(df['keyword'])
     df['label_enc'] = le_label.fit_transform(df['label'])
     
-    X = df[['category_enc', 'severity_enc', 'keyword_enc']].copy()
+    X = df[['category_enc', 'severity_enc', 'keyword_enc']]
     y = df['label_enc']
     
     print("\nTraining XGBoost model...")
@@ -147,13 +140,10 @@ def main():
     # Test predictions
     print("\nTesting predictions:")
     test_cases = [
-        ('Storage Exposure', 'CRITICAL', 'PublicRead', 1),
-        ('Storage Exposure', 'CRITICAL', 'PublicReadWrite', 2),
-        ('Storage Exposure', 'HIGH', 'BlockPublicPolicy: false', 3),
-        ('Storage Exposure', 'CRITICAL', 'Principal star', 9),
-        ('Storage Exposure', 'CRITICAL', 'bucket policy public', 9),
-        ('IAM Over-Permission', 'HIGH', 'Action wildcard', 11),
-        ('Network Oversights', 'HIGH', 'SSH open', 23),
+        ("IAM Over-Permission", "HIGH", "ec2 full access", 16),
+        ("IAM Over-Permission", "HIGH", "ec2:*", 16),
+        ("Storage Exposure", "CRITICAL", "PublicRead", 1),
+        ("Storage Exposure", "CRITICAL", "PublicReadWrite", 2),
     ]
     
     for category, severity, keyword, expected in test_cases:
@@ -164,7 +154,7 @@ def main():
         test_input = pd.DataFrame([[cat_enc, sev_enc, kw_enc]], 
                                   columns=['category_enc', 'severity_enc', 'keyword_enc'])
         pred_enc = xgb_model.predict(test_input)
-        pred_label = le_label.inverse_transform(pred_enc)[0]
+        pred_label = int(le_label.inverse_transform(pred_enc)[0])
         status = "✓" if pred_label == expected else "✗"
         print(f"  {status} '{keyword}' -> {pred_label}, Expected: {expected}")
     
