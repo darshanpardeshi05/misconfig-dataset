@@ -135,7 +135,6 @@ class Phase4Complete:
         cmd = cmd.replace('<RECORDER_NAME>', resource)
         cmd = cmd.replace('<DETECTOR_ID>', resource)
         cmd = cmd.replace('<BUCKET>', resource)
-        cmd = cmd.replace('<BUCKET_NAME>', resource)
         
         print(f"\n  Executing: {cmd[:200]}...")
         
@@ -169,7 +168,7 @@ class Phase4Complete:
     def verify_fix(self, policy, resource):
         """Verify fix was applied (basic verification)"""
         print("\n[4/6] VERIFYING FIX...")
-        time.sleep(5)  # Wait for AWS to propagate changes
+        time.sleep(5)
         
         service = policy.get('aws_service', '').upper()
         
@@ -186,17 +185,16 @@ class Phase4Complete:
                         print("  Verification FAILED: S3 bucket still has public access")
                         return False
                 except:
-                    # No public access block means it's not secure
                     print("  Verification FAILED: No public access block found")
                     return False
             
-            # For other services, assume success if no error
+            # For other services, assume success
             print(f"  Verification assumed PASSED for {service}")
             return True
             
         except Exception as e:
             print(f"  Verification error: {e}")
-            return True  # Assume success
+            return True
     
     def rollback(self, backup_file):
         """Rollback to previous state"""
@@ -263,20 +261,26 @@ if __name__ == "__main__":
     if len(sys.argv) >= 2:
         if sys.argv[1] == '--rollback' and len(sys.argv) == 3:
             success = p4.rollback_mode(sys.argv[2])
-        elif sys.argv[1] == '--id' and len(sys.argv) == 6:
+        elif sys.argv[1] == '--id' and len(sys.argv) >= 6:
             predicted_id = sys.argv[2]
             category = sys.argv[3]
             severity = sys.argv[4]
             keywords = sys.argv[5]
-            success = p4.run_with_id(category, severity, keywords, predicted_id)
+            
+            # Check for --bucket flag
+            bucket_name = None
+            if len(sys.argv) >= 8 and sys.argv[6] == '--bucket':
+                bucket_name = sys.argv[7]
+            
+            success = p4.run_with_id(category, severity, keywords, predicted_id, bucket_name)
         else:
             print("Usage:")
-            print("  python3 phase4_complete.py --id <predicted_id> <category> <severity> <keywords>")
+            print("  python3 phase4_complete.py --id <id> <category> <severity> <keywords> [--bucket <name>]")
             print("  python3 phase4_complete.py --rollback <backup_file>")
             sys.exit(1)
     else:
         print("Usage:")
-        print("  python3 phase4_complete.py --id <predicted_id> <category> <severity> <keywords>")
+        print("  python3 phase4_complete.py --id <id> <category> <severity> <keywords> [--bucket <name>]")
         print("  python3 phase4_complete.py --rollback <backup_file>")
         sys.exit(1)
     
