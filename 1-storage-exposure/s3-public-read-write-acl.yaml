@@ -1,18 +1,16 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: MISCONFIGURATION - S3 bucket with PublicReadWrite ACL
+Description: MISCONFIGURATION - S3 bucket with public read/write access via bucket policy
 
-# METADATA - For research tracking and automated detection
 Metadata:
   Misconfiguration:
     Category: "Storage-Exposure"
     Severity: "CRITICAL"
     RuleId: "S3-002"
-    Description: "S3 bucket allows public read AND write access via ACL"
-    Remediation: "Set AccessControl to Private and enable BlockPublicAccess"
+    Description: "S3 bucket allows public read AND write access via bucket policy"
+    Remediation: "Remove public bucket policy and enable BlockPublicAccess"
     Keywords:
       - "PublicReadWrite"
       - "S3 Public Write"
-      - "Public ACL Write"
       - "Anyone can upload"
       - "BlockPublicAccess disabled"
     ML_Label: "misconfiguration"
@@ -21,21 +19,15 @@ Resources:
   PublicReadWriteBucket:
     Type: AWS::S3::Bucket
     Properties:
-
-      # Unique bucket name to avoid global conflicts
-      BucketName: !Sub "s3-public-rw-${AWS::AccountId}-${AWS::StackName}"
-
-      # MISCONFIGURATION: Public read and write access enabled
-      AccessControl: PublicReadWrite
-
-      # MISCONFIGURATION: Block Public Access disabled
+      BucketName: !Sub "s3-rw-${AWS::AccountId}-${AWS::StackName}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
         BlockPublicPolicy: false
         IgnorePublicAcls: false
         RestrictPublicBuckets: false
-
-      # Tags used for filtering, classification, and mapping
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       Tags:
         - Key: Name
           Value: "S3-Public-ReadWrite-Bucket"
@@ -45,22 +37,29 @@ Resources:
           Value: "Storage-Exposure"
         - Key: Severity
           Value: "CRITICAL"
-        - Key: Batch
-          Value: "Batch-1"
+
+  PublicBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PublicReadWriteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: "*"
+            Action: 
+              - "s3:GetObject"
+              - "s3:PutObject"
+              - "s3:DeleteObject"
+            Resource: !Sub "${PublicReadWriteBucket.Arn}/*"
 
 Outputs:
   BucketName:
-    Description: "Name of the publicly readable and writable S3 bucket"
+    Description: "Name of the publicly accessible S3 bucket"
     Value: !Ref PublicReadWriteBucket
-
   Risk:
     Description: "Security Risk"
-    Value: "This bucket allows anyone on the internet to read AND upload/modify/delete objects."
-
+    Value: "This bucket allows public read and write access"
   FixCommand:
     Description: "Remediation Command"
-    Value: |
-      aws s3api put-public-access-block \
-        --bucket <BUCKET_NAME> \
-        --public-access-block-configuration \
-        BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+    Value: !Sub "aws s3api delete-bucket-policy --bucket ${PublicReadWriteBucket} && aws s3api put-public-access-block --bucket ${PublicReadWriteBucket} --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
