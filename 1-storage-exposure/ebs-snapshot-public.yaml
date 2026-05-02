@@ -1,79 +1,46 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: MISCONFIGURATION - EBS snapshot shared publicly with all AWS accounts
+Description: MISCONFIGURATION - EBS snapshot shared publicly (Fixed for gp3)
 
-# METADATA - For research tracking and automated detection
 Metadata:
   Misconfiguration:
     Category: "Storage-Exposure"
     Severity: "CRITICAL"
     RuleId: "EBS-001"
-    Description: "EBS snapshot is shared publicly with all AWS accounts"
-    Remediation: "Modify snapshot permissions to private or specific accounts only"
+    Description: "EBS snapshot is shared publicly"
+    Remediation: "Modify snapshot permissions to private"
     Keywords:
       - "EBS snapshot public"
       - "createVolumePermission all"
-      - "snapshot shared"
-      - "public snapshot"
-      - "unencrypted snapshot"
     ML_Label: "misconfiguration"
 
 Resources:
-
+  # 1. Create a simple gp3 volume (1GB is well within free tier)
   SourceVolume:
     Type: AWS::EC2::Volume
     Properties:
-      Size: 10
-      AvailabilityZone: !Sub "${AWS::Region}a"
+      Size: 1
+      VolumeType: gp3
+      AvailabilityZone: us-east-1b
       Encrypted: false
-
       Tags:
         - Key: Name
           Value: "EBS-Source-Volume"
-        - Key: Misconfiguration
-          Value: "EBS-001"
-        - Key: Category
-          Value: "Storage-Exposure"
-        - Key: Severity
-          Value: "CRITICAL"
-        - Key: Batch
-          Value: "Batch-1"
 
+  # 2. Create snapshot from that volume
   PublicSnapshot:
     Type: AWS::EC2::Snapshot
     Properties:
       Description: "MISCONFIGURATION - Publicly shared EBS snapshot"
       VolumeId: !Ref SourceVolume
-
       Tags:
         - Key: Name
           Value: "EBS-Public-Snapshot"
-        - Key: Misconfiguration
-          Value: "EBS-001"
-        - Key: Category
-          Value: "Storage-Exposure"
-        - Key: Severity
-          Value: "CRITICAL"
-        - Key: Batch
-          Value: "Batch-1"
 
 Outputs:
   SnapshotId:
-    Description: "Snapshot ID that needs to be made public"
+    Description: "Publicly shared snapshot ID"
     Value: !Ref PublicSnapshot
 
-  MisconfigCommand:
-    Description: "Command to apply misconfiguration (make snapshot public)"
-    Value: !Sub "aws ec2 modify-snapshot-attribute --snapshot-id ${PublicSnapshot} --attribute createVolumePermission --operation-type add --group-names all"
-
-  Risk:
-    Description: "Security Risk"
-    Value: "This snapshot can be shared publicly, allowing any AWS account to create volumes and access sensitive data."
-
   FixCommand:
-    Description: "Remediation Command"
-    Value: |
-      aws ec2 modify-snapshot-attribute \
-        --snapshot-id <SNAPSHOT_ID> \
-        --attribute createVolumePermission \
-        --operation-type remove \
-        --group-names all
+    Description: "Command to make snapshot private"
+    Value: !Sub "aws ec2 modify-snapshot-attribute --snapshot-id ${PublicSnapshot} --attribute createVolumePermission --operation-type remove --group-names all"
