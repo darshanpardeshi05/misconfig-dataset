@@ -1,0 +1,6 @@
+2026-05-02 16:26:33,098 - custodian.policy - DEBUG - Running policy:check-ebs-snapshot-public resource:aws.ebs-snapshot region:us-east-1 c7n:0.9.41
+2026-05-02 16:26:33,098 - custodian.resources.snapshot - DEBUG - Using cached c7n.resources.ebs.Snapshot: 1
+2026-05-02 16:26:33,099 - custodian.resources.snapshot - DEBUG - Filtered from 1 to 0 snapshot
+2026-05-02 16:26:33,099 - custodian.policy - INFO - policy:check-ebs-snapshot-public resource:aws.ebs-snapshot region:us-east-1 count:0 time:0.00
+2026-05-02 16:26:33,100 - custodian.output - DEBUG - metric:ResourceCount Count:0 policy:check-ebs-snapshot-public restype:aws.ebs-snapshot scope:policy
+2026-05-02 16:26:33,100 - custodian.output - DEBUG - metric:ApiCalls Count:0 policy:check-ebs-snapshot-public restype:aws.ebs-snapshot

@@ -2,6 +2,7 @@
 """
 Complete Pipeline for AWS Misconfiguration Detection
 Phase 3 only - Prioritizes Keyword Match over XGBoost
+Supports both direct prediction and pre-detected ID mode
 """
 
 import joblib
@@ -100,6 +101,29 @@ class MisconfigDetectionPipeline:
             print(f"  XGBoost prediction failed: {e}")
             return None
     
+    def predict_with_id(self, category, severity, keywords, predicted_id):
+        """Run pipeline with pre-detected ID (skip ML prediction)"""
+        print("\n" + "-" * 40)
+        print("PREDICTION REQUEST (WITH PREDETECTED ID)")
+        print("-" * 40)
+        print(f"Input: category={category}, severity={severity}")
+        print(f"Keywords: {keywords[:100]}...")
+        print(f"Pre-detected ID: {predicted_id}")
+        
+        result = {
+            "input": {"category": category, "severity": severity, "keywords": keywords},
+            "final_verdict": predicted_id
+        }
+        
+        fix_policy = self.fix_policies.get(str(predicted_id))
+        if fix_policy:
+            result["fix_policy"] = fix_policy
+            print(f"\nFix Policy:")
+            print(f"  Remediation: {fix_policy.get('remediation', 'N/A')[:100]}...")
+            print(f"  Service: {fix_policy.get('aws_service', 'N/A')}")
+        
+        return result
+    
     def predict(self, category, severity, keywords):
         print("\n" + "-" * 40)
         print("PREDICTION REQUEST")
@@ -129,7 +153,6 @@ class MisconfigDetectionPipeline:
         print("FINAL VERDICT")
         print("-" * 40)
         
-        # Prioritize keyword match when confidence is high (>= 0.5)
         final_id = None
         if keyword_id and keyword_confidence >= 0.5:
             final_id = keyword_id
@@ -148,33 +171,61 @@ class MisconfigDetectionPipeline:
                 print(f"\nFix Policy:")
                 print(f"  Remediation: {fix_policy.get('remediation', 'N/A')[:100]}...")
                 print(f"  Service: {fix_policy.get('aws_service', 'N/A')}")
-            return final_id
+            
+            result = {
+                "input": {"category": category, "severity": severity, "keywords": keywords},
+                "final_verdict": final_id,
+                "fix_policy": fix_policy
+            }
+            return result
         else:
             print("ERROR: Could not identify misconfiguration")
-            return None
+            return {"final_verdict": None}
 
 
 if __name__ == "__main__":
     pipeline = MisconfigDetectionPipeline()
     
-    if len(sys.argv) == 4:
-        category = sys.argv[1]
-        severity = sys.argv[2]
-        keywords = sys.argv[3]
+    if len(sys.argv) == 5 and sys.argv[1] == '--id':
+        predicted_id = int(sys.argv[2])
+        category = sys.argv[3]
+        severity = sys.argv[4]
+        keywords = sys.argv[5]
         
-        result_id = pipeline.predict(category, severity, keywords)
+        result = pipeline.predict_with_id(category, severity, keywords, predicted_id)
         
         print("\n" + "=" * 60)
         print("PHASE 3 COMPLETE")
         print("=" * 60)
-        print(f"Final Verdict: Misconfig ID {result_id}")
+        print(f"Final Verdict: Misconfig ID {result['final_verdict']}")
+        
+        if result.get('fix_policy'):
+            print(f"\nRemediation: {result['fix_policy'].get('remediation', 'N/A')}")
+        
+    elif len(sys.argv) == 4:
+        category = sys.argv[1]
+        severity = sys.argv[2]
+        keywords = sys.argv[3]
+        
+        result = pipeline.predict(category, severity, keywords)
+        
+        print("\n" + "=" * 60)
+        print("PHASE 3 COMPLETE")
+        print("=" * 60)
+        print(f"Final Verdict: Misconfig ID {result.get('final_verdict')}")
+        
+        if result.get('fix_policy'):
+            print(f"\nRemediation: {result['fix_policy'].get('remediation', 'N/A')}")
+        
         print("\n" + "=" * 60)
         print("NEXT STEP: Run Phase 4 manually:")
-        print(f"  python3 phase4_complete.py --id {result_id} \"{category}\" \"{severity}\" \"{keywords}\"")
+        print(f"  python3 phase4_complete.py --id {result.get('final_verdict')} \"{category}\" \"{severity}\" \"{keywords}\"")
         print("=" * 60)
         
     else:
         print("\nUsage:")
         print("  python3 pipeline.py <category> <severity> <keywords>")
+        print("  python3 pipeline.py --id <id> <category> <severity> <keywords>")
         print("\nExample:")
         print("  python3 pipeline.py 'Storage Exposure' 'CRITICAL' 'PublicRead'")
+        print("  python3 pipeline.py --id 3 'Storage Exposure' 'HIGH' 'BlockPublicAccess disabled'")

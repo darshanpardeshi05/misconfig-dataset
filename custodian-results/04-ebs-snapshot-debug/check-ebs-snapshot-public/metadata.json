@@ -1,0 +1,94 @@
+{
+  "policy": {
+    "name": "check-ebs-snapshot-public",
+    "resource": "aws.ebs-snapshot",
+    "description": "EBS snapshot is shared publicly with all AWS accounts",
+    "metadata": {
+      "rule_id": "EBS-001",
+      "category": "Storage-Exposure",
+      "severity": "CRITICAL",
+      "remediation": "Modify snapshot permissions to private or specific accounts only",
+      "keywords": [
+        "EBS snapshot public",
+        "createVolumePermission all"
+      ]
+    },
+    "filters": [
+      {
+        "type": "value",
+        "key": "CreateVolumePermissions",
+        "value": [
+          {
+            "Group": "all"
+          }
+        ],
+        "op": "contains"
+      }
+    ]
+  },
+  "version": "0.9.41",
+  "execution": {
+    "id": "295b8a3b-f480-412a-9593-f0e5a40b0435",
+    "start": 1777719393.089626,
+    "end_time": 1777719393.0995624,
+    "duration": 0.009936332702636719
+  },
+  "config": {
+    "region": "us-east-1",
+    "regions": [
+      "us-east-1"
+    ],
+    "cache": "~/.cache/cloud-custodian.cache",
+    "profile": null,
+    "account_id": "719279823313",
+    "assume_role": null,
+    "session_policy": null,
+    "external_id": null,
+    "log_group": null,
+    "tracer": null,
+    "metrics_enabled": null,
+    "metrics": null,
+    "output_dir": "custodian-results/04-ebs-snapshot-debug",
+    "cache_period": 15,
+    "dryrun": true,
+    "authorization_file": null,
+    "subparser": "run",
+    "config": null,
+    "configs": [
+      "custodian-policies/04-ebs-snapshot-public.yaml"
+    ],
+    "policy_filters": [],
+    "resource_types": [],
+    "verbose": 1,
+    "quiet": null,
+    "debug": false,
+    "skip_validation": false,
+    "command": "c7n.commands.run",
+    "vars": null
+  },
+  "sys-stats": {
+    "snapshot_time": 0.00994873046875,
+    "num_fds": 1,
+    "cpu_user": 0.010000000000000009,
+    "read_count": 21,
+    "write_count": 10,
+    "write_bytes": 8192,
+    "rss": 679936,
+    "shared": 532480
+  },
+  "api-stats": {},
+  "metrics": [
+    {
+      "MetricName": "ResourceCount",
+      "Timestamp": "2026-05-02T16:26:33.099379",
+      "Value": 0,
+      "Unit": "Count"
+    },
+    {
+      "MetricName": "ResourceTime",
+      "Timestamp": "2026-05-02T16:26:33.099385",
+      "Value": 0.0009529590606689453,
+      "Unit": "Seconds"
+    }
+  ]
+}
