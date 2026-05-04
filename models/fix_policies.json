@@ -61,7 +61,7 @@
     "severity": "HIGH",
     "description": "ECR repository allows public pull access (anyone can pull images without authentication)",
     "remediation": "Restrict repository policy to specific IAM principals and enable image scanning",
-    "fix_command": "aws ecr set-repository-policy --repository-name <REPO_NAME> --policy-text '{}'",
+    "fix_command": "aws ecr delete-repository-policy --repository-name <REPO_NAME>",
     "aws_service": "ECR",
     "aws_action": "set-repository-policy"
   },
@@ -105,9 +105,10 @@
     "severity": "HIGH",
     "description": "Individual S3 object has public read ACL even though bucket is private",
     "remediation": "Remove public-read ACL from object",
-    "fix_command": "aws s3api put-object-acl --bucket <BUCKET_NAME> --key <OBJECT_KEY> --acl private",
+    "fix_command": "aws s3api put-object-acl --bucket <BUCKET_NAME> --key sensitive.txt --acl private",
     "aws_service": "S3",
-    "aws_action": "put-object-acl"
+    "aws_action": "put-object-acl",
+    "object_key": "sensitive.txt"
   },
   "11": {
     "misconfig_id": 11,
@@ -120,25 +121,25 @@
     "aws_service": "IAM",
     "aws_action": "delete-user-policy"
   },
-  "12": {
+   "12": {
     "misconfig_id": 12,
     "rule_id": "IAM-002",
     "category": "IAM-OverPermission",
     "severity": "HIGH",
     "description": "IAM policy allows access to ALL resources (*) which is overly permissive",
     "remediation": "Restrict Resource to specific ARNs",
-    "fix_command": "aws iam delete-user-policy --user-name <USER_NAME> --policy-name <POLICY_NAME>",
+    "fix_command": "aws iam delete-user-policy --user-name wildcard-resource-user-misconfig-iam-012 --policy-name WildcardResourcePolicy-misconfig-iam-012",
     "aws_service": "IAM",
     "aws_action": "delete-user-policy"
   },
-  "13": {
+    "13": {
     "misconfig_id": 13,
     "rule_id": "IAM-003",
     "category": "IAM-OverPermission",
     "severity": "CRITICAL",
     "description": "IAM policy grants full administrative access using Action '*' and Resource '*'",
     "remediation": "Remove policy and enforce least-privilege access",
-    "fix_command": "aws iam delete-user-policy --user-name <USER_NAME> --policy-name <POLICY_NAME>",
+    "fix_command": "aws iam delete-user-policy --user-name full-admin-user-misconfig-iam-013 --policy-name WildcardBothPolicy-misconfig-iam-013",
     "aws_service": "IAM",
     "aws_action": "delete-user-policy"
   },
@@ -153,14 +154,14 @@
     "aws_service": "IAM",
     "aws_action": "detach-role-policy"
   },
-  "15": {
+    "15": {
     "misconfig_id": 15,
     "rule_id": "IAM-005",
     "category": "IAM-OverPermission",
     "severity": "HIGH",
     "description": "IAM user has s3:* permission - can perform ANY S3 action on ANY S3 resource in the account",
     "remediation": "Replace s3:* with specific actions and restrict to specific bucket ARNs",
-    "fix_command": "aws iam delete-user-policy --user-name <USER_NAME> --policy-name <POLICY_NAME>",
+    "fix_command": "aws iam delete-user-policy --user-name s3-full-access-user-misconfig-iam-015 --policy-name S3FullAccessPolicy-misconfig-iam-015",
     "aws_service": "IAM",
     "aws_action": "delete-user-policy"
   },
