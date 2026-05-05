@@ -220,14 +220,14 @@
     "aws_service": "IAM",
     "aws_action": "update-access-key + create-access-key"
   },
-  "21": {
+    "21": {
     "misconfig_id": 21,
     "rule_id": "IAM-011",
     "category": "IAM-OverPermission",
     "severity": "CRITICAL",
     "description": "IAM role trust policy uses Principal: '*' which allows ANY AWS account or ANY user to assume this role",
-    "remediation": "Replace Principal: '*' with specific AWS account IDs or specific IAM users/roles",
-    "fix_command": "aws iam update-assume-role-policy --role-name <ROLE_NAME> --policy-document '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::YOUR_ACCOUNT_ID:root\"},\"Action\":\"sts:AssumeRole\"}]}'",
+    "remediation": "Replace Principal: '*' with specific AWS account IDs",
+    "fix_command": "aws iam update-assume-role-policy --role-name dangerous-role-misconfig-iam-021 --policy-document '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::719279823313:root\"},\"Action\":\"sts:AssumeRole\"}]}'",
     "aws_service": "IAM",
     "aws_action": "update-assume-role-policy"
   },
