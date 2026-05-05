@@ -187,16 +187,16 @@
     "aws_service": "IAM",
     "aws_action": "enable-mfa"
   },
-  "18": {
+    "18": {
     "misconfig_id": 18,
     "rule_id": "IAM-008",
     "category": "IAM-OverPermission",
     "severity": "HIGH",
     "description": "IAM user does not have MFA (Multi-Factor Authentication) enabled",
-    "remediation": "Enable MFA for the IAM user using Virtual MFA device",
-    "fix_command": "aws iam create-virtual-mfa-device --virtual-mfa-device-name <DEVICE_NAME> --outfile path/to/qrcode.png",
+    "remediation": "Delete the user without MFA",
+    "fix_command": "aws iam delete-user --user-name no-mfa-user-misconfig-iam-018",
     "aws_service": "IAM",
-    "aws_action": "create-virtual-mfa-device"
+    "aws_action": "delete-user"
   },
   "19": {
     "misconfig_id": 19,
