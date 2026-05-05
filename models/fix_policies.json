@@ -231,14 +231,14 @@
     "aws_service": "IAM",
     "aws_action": "update-assume-role-policy"
   },
-  "22": {
+    "22": {
     "misconfig_id": 22,
     "rule_id": "IAM-012",
     "category": "IAM-OverPermission",
     "severity": "CRITICAL",
     "description": "Lambda execution role has AdministratorAccess managed policy attached",
     "remediation": "Replace AdministratorAccess with least privilege policy specific to Lambda's needs",
-    "fix_command": "aws iam detach-role-policy --role-name <ROLE_NAME> --policy-arn arn:aws:iam::aws:policy/AdministratorAccess",
+    "fix_command": "aws iam detach-role-policy --role-name lambda-overly-permissive-role-misconfig-lambda-022 --policy-arn arn:aws:iam::aws:policy/AdministratorAccess",
     "aws_service": "IAM",
     "aws_action": "detach-role-policy"
   },
@@ -270,21 +270,21 @@
     "category": "Network-Oversights",
     "severity": "CRITICAL",
     "description": "Security group allows MySQL (port 3306) from 0.0.0.0/0",
-    "remediation": "Restrict MySQL access to specific application servers or VPC CIDR only. Databases should never be publicly accessible.",
-    "fix_command": "aws rds modify-db-instance --db-instance-identifier <DB_ID> --no-publicly-accessible && aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 3306 --cidr 0.0.0.0/0",
-    "aws_service": "RDS + EC2",
-    "aws_action": "modify-db-instance + revoke-security-group-ingress"
+    "remediation": "Restrict MySQL access to specific application servers or VPC CIDR only",
+    "fix_command": "aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 3306 --cidr 0.0.0.0/0",
+    "aws_service": "EC2",
+    "aws_action": "revoke-security-group-ingress"
   },
-  "26": {
+    "26": {
     "misconfig_id": 26,
     "rule_id": "SG-004",
     "category": "Network-Oversights",
     "severity": "CRITICAL",
     "description": "Security group allows PostgreSQL (port 5432) from 0.0.0.0/0",
-    "remediation": "Restrict PostgreSQL access to specific application servers or VPC CIDR only. Databases should never be publicly accessible.",
-    "fix_command": "aws rds modify-db-instance --db-instance-identifier <DB_ID> --no-publicly-accessible && aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 5432 --cidr 0.0.0.0/0",
-    "aws_service": "RDS + EC2",
-    "aws_action": "modify-db-instance + revoke-security-group-ingress"
+    "remediation": "Restrict PostgreSQL access to specific application servers or VPC CIDR only",
+    "fix_command": "aws ec2 revoke-security-group-ingress --group-id <SG_ID> --protocol tcp --port 5432 --cidr 0.0.0.0/0",
+    "aws_service": "EC2",
+    "aws_action": "revoke-security-group-ingress"
   },
   "27": {
     "misconfig_id": 27,
