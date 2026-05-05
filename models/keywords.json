@@ -35,7 +35,7 @@
     "severity": "CRITICAL"
   },
   "efs-public-mount.yaml": {
-    "keywords": ["port 2049", "0.0.0.0/0", "MountTarget", "PublicSubnet"],
+    "keywords": ["EFS public", "NFS 2049 open", "mount target public", "0.0.0.0/0", "unencrypted EFS"],
     "category": "Storage Exposure",
     "severity": "HIGH"
   },
@@ -45,7 +45,7 @@
     "severity": "CRITICAL"
   },
   "s3-object-public-acl.yaml": {
-    "keywords": ["public-read", "put-object-acl", "ACL: 'public-read'"],
+    "keywords": ["s3 object public", "public-read object", "object level exposure", "s3 object public acl", "PutObjectAcl"],
     "category": "Storage Exposure",
     "severity": "HIGH"
   },
@@ -60,7 +60,7 @@
     "severity": "HIGH"
   },
   "iam-wildcard-both.yaml": {
-    "keywords": ["Action: '*'", "Resource: '*'", "AdministratorAccess", "Effect: Allow"],
+    "keywords": ["Action and Resource wildcard", "full admin policy", "iam full access", "both wildcard", "administrator equivalent"],
     "category": "IAM Over-Permission",
     "severity": "CRITICAL"
   },
@@ -99,8 +99,8 @@
     "category": "IAM Over-Permission",
     "severity": "MEDIUM"
   },
-  "iam-trust-policy-principal-star.yaml": {
-    "keywords": ["Principal: '*'", "sts:AssumeRole", "Trust policy", "AssumeRolePolicyDocument"],
+    "iam-trust-policy-principal-star.yaml": {
+    "keywords": ["Principal star trust", "trust policy principal star", "anyone can assume role", "sts:AssumeRole"],
     "category": "IAM Over-Permission",
     "severity": "CRITICAL"
   },
@@ -109,23 +109,23 @@
     "category": "IAM Over-Permission",
     "severity": "CRITICAL"
   },
-  "sg-ssh-open-world.yaml": {
-    "keywords": ["port 22", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "FromPort: 22"],
+    "sg-ssh-open-world.yaml": {
+    "keywords": ["SSH open", "port 22 open", "ssh from anywhere", "0.0.0.0/0 ssh"],
     "category": "Network Oversights",
     "severity": "HIGH"
   },
-  "sg-rdp-open-world.yaml": {
-    "keywords": ["port 3389", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "FromPort: 3389"],
+    "sg-rdp-open-world.yaml": {
+    "keywords": ["RDP open", "port 3389 open", "rdp from anywhere", "3389 0.0.0.0/0"],
     "category": "Network Oversights",
     "severity": "HIGH"
   },
-  "sg-mysql-open-world.yaml": {
-    "keywords": ["port 3306", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "PubliclyAccessible: true"],
+    "sg-mysql-open-world.yaml": {
+    "keywords": ["MySQL open", "port 3306 open", "mysql from anywhere", "3306 0.0.0.0/0"],
     "category": "Network Oversights",
     "severity": "CRITICAL"
   },
-  "sg-postgres-open-world.yaml": {
-    "keywords": ["port 5432", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "PubliclyAccessible: true"],
+    "sg-postgres-open-world.yaml": {
+    "keywords": ["PostgreSQL open", "port 5432 open", "postgres from anywhere", "5432 0.0.0.0/0"],
     "category": "Network Oversights",
     "severity": "CRITICAL"
   },
