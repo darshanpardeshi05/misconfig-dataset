@@ -120,7 +120,10 @@ training_data = [
     ("Network Oversights", "CRITICAL", "port 5432 open", 26),
     ("Network Oversights", "CRITICAL", "postgres from anywhere", 26),
     ("Network Oversights", "CRITICAL", "Redis open", 27),
+    # Misconfig #28
     ("Network Oversights", "CRITICAL", "MongoDB open", 28),
+    ("Network Oversights", "CRITICAL", "port 27017 open", 28),
+    ("Network Oversights", "CRITICAL", "mongodb from anywhere", 28),
     ("Network Oversights", "CRITICAL", "All ports open", 29),
     ("Network Oversights", "MEDIUM", "Flow logs disabled", 30),
     ("Network Oversights", "CRITICAL", "RDS public", 31),

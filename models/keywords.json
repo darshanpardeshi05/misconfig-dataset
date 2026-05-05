@@ -134,8 +134,8 @@
     "category": "Network Oversights",
     "severity": "CRITICAL"
   },
-  "sg-mongodb-open-world.yaml": {
-    "keywords": ["port 27017", "0.0.0.0/0", "CidrIp: 0.0.0.0/0", "MongoDB"],
+    "sg-mongodb-open-world.yaml": {
+    "keywords": ["MongoDB open", "port 27017 open", "mongodb from anywhere", "27017 0.0.0.0/0"],
     "category": "Network Oversights",
     "severity": "CRITICAL"
   },
