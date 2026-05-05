@@ -98,10 +98,23 @@ training_data = [
     ("IAM Over-Permission", "CRITICAL", "Principal star trust", 21),
     ("IAM Over-Permission", "CRITICAL", "trust policy principal star", 21),
     ("IAM Over-Permission", "CRITICAL", "anyone can assume role", 21),
+    # Misconfig #22
+    ("IAM Over-Permission", "CRITICAL", "Lambda over permissive", 22),
+    ("IAM Over-Permission", "CRITICAL", "lambda execution role", 22),
+    ("IAM Over-Permission", "CRITICAL", "AdministratorAccess lambda", 22),
     # Network misconfigs
+    # Misconfig #23
     ("Network Oversights", "HIGH", "SSH open", 23),
+    ("Network Oversights", "HIGH", "port 22 open", 23),
+    ("Network Oversights", "HIGH", "ssh from anywhere", 23),
+    # Misconfig #24
     ("Network Oversights", "HIGH", "RDP open", 24),
+    ("Network Oversights", "HIGH", "port 3389 open", 24),
+    ("Network Oversights", "HIGH", "rdp from anywhere", 24),
+    # Misconfig #25
     ("Network Oversights", "CRITICAL", "MySQL open", 25),
+    ("Network Oversights", "CRITICAL", "port 3306 open", 25),
+    ("Network Oversights", "CRITICAL", "mysql from anywhere", 25),
     ("Network Oversights", "CRITICAL", "PostgreSQL open", 26),
     ("Network Oversights", "CRITICAL", "Redis open", 27),
     ("Network Oversights", "CRITICAL", "MongoDB open", 28),
