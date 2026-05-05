@@ -40,15 +40,20 @@ training_data = [
     ("Storage Exposure", "CRITICAL", "modify-image-attribute", 7),
     ("Storage Exposure", "CRITICAL", "launch-permission", 7),
     # Misconfig #8
+    ("Storage Exposure", "HIGH", "EFS public mount", 8),
     ("Storage Exposure", "HIGH", "port 2049", 8),
     ("Storage Exposure", "HIGH", "0.0.0.0/0", 8),
+    ("Storage Exposure", "HIGH", "MountTarget", 8),
+    ("Storage Exposure", "HIGH", "PublicSubnet", 8),
     # Misconfig #9
     ("Storage Exposure", "CRITICAL", "Principal: '*'", 9),
     ("Storage Exposure", "CRITICAL", "bucket policy public", 9),
     ("Storage Exposure", "CRITICAL", "Principal star", 9),
     # Misconfig #10
-    ("Storage Exposure", "HIGH", "public-read", 10),
-    ("Storage Exposure", "HIGH", "put-object-acl", 10),
+    ("Storage Exposure", "HIGH", "S3 object public", 10),
+    ("Storage Exposure", "HIGH", "public-read object", 10),
+    ("Storage Exposure", "HIGH", "object level exposure", 10),
+    ("Storage Exposure", "HIGH", "PutObjectAcl", 10),
     # Misconfig #11
     ("IAM Over-Permission", "HIGH", "Action: '*'", 11),
     ("IAM Over-Permission", "HIGH", "Action wildcard", 11),
@@ -57,8 +62,18 @@ training_data = [
     ("IAM Over-Permission", "HIGH", "Resource wildcard", 12),
     # Misconfig #13
     ("IAM Over-Permission", "CRITICAL", "Action and Resource wildcard", 13),
+    ("IAM Over-Permission", "CRITICAL", "full admin policy", 13),
+    ("IAM Over-Permission", "CRITICAL", "both wildcard", 13),
+    ("IAM Over-Permission", "CRITICAL", "administrator equivalent", 13),
     # Misconfig #14
     ("IAM Over-Permission", "CRITICAL", "AdministratorAccess", 14),
+    ("IAM Over-Permission", "CRITICAL", "AdministratorAccess", 14),
+    ("IAM Over-Permission", "CRITICAL", "AdministratorAccess", 14),
+    ("IAM Over-Permission", "CRITICAL", "AdministratorAccess", 14),
+    ("IAM Over-Permission", "CRITICAL", "AdministratorAccess", 14),
+    ("IAM Over-Permission", "CRITICAL", "iam admin role", 14),
+    ("IAM Over-Permission", "CRITICAL", "managed policy admin", 14),
+    ("IAM Over-Permission", "CRITICAL", "full access role", 14),
     # Misconfig #15
     ("IAM Over-Permission", "HIGH", "s3:*", 15),
     ("IAM Over-Permission", "HIGH", "s3 full access", 15),
@@ -66,6 +81,23 @@ training_data = [
     ("IAM Over-Permission", "HIGH", "ec2:*", 16),
     ("IAM Over-Permission", "HIGH", "ec2 full access", 16),
     ("IAM Over-Permission", "HIGH", "ec2 full access user", 16),
+    # Misconfig #18
+    ("IAM Over-Permission", "HIGH", "User MFA missing", 18),
+    ("IAM Over-Permission", "HIGH", "MFADevice", 18),
+    ("IAM Over-Permission", "HIGH", "no mfa user", 18),
+    # Misconfig #19
+    ("IAM Over-Permission", "MEDIUM", "Inactive user", 19),
+    ("IAM Over-Permission", "MEDIUM", "AccessKey Active", 19),
+    ("IAM Over-Permission", "MEDIUM", "Orphaned account", 19),
+    ("IAM Over-Permission", "MEDIUM", "Unused credentials", 19),
+    # Misconfig #20
+    ("IAM Over-Permission", "MEDIUM", "Old access key", 20),
+    ("IAM Over-Permission", "MEDIUM", "AccessKey", 20),
+    ("IAM Over-Permission", "MEDIUM", "Key rotation", 20),
+    # Misconfig #21
+    ("IAM Over-Permission", "CRITICAL", "Principal star trust", 21),
+    ("IAM Over-Permission", "CRITICAL", "trust policy principal star", 21),
+    ("IAM Over-Permission", "CRITICAL", "anyone can assume role", 21),
     # Network misconfigs
     ("Network Oversights", "HIGH", "SSH open", 23),
     ("Network Oversights", "HIGH", "RDP open", 24),
